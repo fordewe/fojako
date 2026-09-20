@@ -1,5 +1,10 @@
 """Instantiate task templates with real class/function names from dataset projects.
 
+Elements are drawn from the same module the task runner will use as context —
+the largest module that fits the token budget. Drawing from the whole
+repository would produce questions about classes the model is never shown,
+turning the evaluation into a test of refusing to guess.
+
 Usage:
     uv run python evaluation/instantiate_tasks.py \
         --datasets evaluation/datasets.json \
@@ -23,6 +28,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from kotlin_mcp.summarizer import _collect_files
 from kotlin_mcp.parsers.kotlin import KotlinParser
 from kotlin_mcp.parsers.java import JavaParser
+from modules import find_modules, module_own_files, select_module
+
+MAX_CONTEXT_TOKENS = 180_000  # must match task_runner.MAX_CONTEXT_TOKENS
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -31,9 +39,8 @@ _kotlin_parser = KotlinParser()
 _java_parser = JavaParser()
 
 
-def extract_project_elements(project_path: Path) -> dict:
-    """Extract classes, interfaces, functions, packages from a project."""
-    files = _collect_files(project_path, depth=None)
+def extract_module_elements(module_path: Path, files: list[Path]) -> dict:
+    """Extract classes, interfaces, functions, packages from one module."""
     classes = []
     interfaces = []
     functions = []
@@ -57,6 +64,7 @@ def extract_project_elements(project_path: Path) -> dict:
                     "package": summary.package,
                     "has_constructor": bool(cls.constructor_params),
                     "has_functions": bool(cls.functions),
+                    "function_names": [fn.name for fn in cls.functions if fn.name],
                 }
                 if cls.kind == "interface":
                     interfaces.append(entry)
@@ -86,7 +94,7 @@ def extract_project_elements(project_path: Path) -> dict:
         "classes": classes,
         "interfaces": interfaces,
         "functions": functions,
-        "packages": list(packages),
+        "packages": sorted(packages),
         "class_pairs": class_pairs,
     }
 
@@ -124,6 +132,7 @@ def instantiate_tasks(
     tasks = []
 
     classes_with_fns = [c for c in elements["classes"] if c["has_functions"]]
+    classes_with_named_fns = [c for c in elements["classes"] if c["function_names"]]
     classes_with_ctor = [c for c in elements["classes"] if c["has_constructor"]]
     layers = infer_layers(elements["packages"])
 
@@ -157,9 +166,9 @@ def instantiate_tasks(
             elif tid == "und_03" and elements["class_pairs"]:
                 pair = pick(elements["class_pairs"])[0]
                 question = template.format(class_a=pair[0], class_b=pair[1])
-            elif tid == "und_04" and classes_with_fns:
-                cls = pick(classes_with_fns)[0]
-                fn_name = "execute"  # common pattern
+            elif tid == "und_04" and classes_with_named_fns:
+                cls = pick(classes_with_named_fns)[0]
+                fn_name = pick(cls["function_names"])[0]
                 question = template.format(
                     function_name=fn_name, class_name=cls["name"]
                 )
@@ -231,8 +240,24 @@ def main():
             logger.warning("Project not found: %s", project_path)
             continue
 
-        logger.info("Extracting elements from %s...", project["name"])
-        elements = extract_project_elements(project_path)
+        chosen, measured = select_module(
+            project_path, _collect_files, MAX_CONTEXT_TOKENS
+        )
+        if chosen is None:
+            logger.warning(
+                "  %s: no module fits %d tokens (%d considered) — no tasks generated",
+                project["name"], MAX_CONTEXT_TOKENS, len(measured),
+            )
+            continue
+
+        files = module_own_files(
+            chosen["path"], find_modules(project_path), _collect_files
+        )
+        logger.info(
+            "Extracting from %s / module %s (%d files, %d tok)...",
+            project["name"], chosen["name"], len(files), chosen["full_tokens"],
+        )
+        elements = extract_module_elements(chosen["path"], files)
         logger.info(
             "  Found %d classes, %d interfaces, %d functions",
             len(elements["classes"]),
@@ -243,12 +268,15 @@ def main():
         tasks = instantiate_tasks(
             project["name"], elements, templates_data["task_templates"]
         )
+        for task in tasks:
+            task["module"] = chosen["name"]
         all_tasks.extend(tasks)
         logger.info("  Generated %d tasks", len(tasks))
 
     output = {
         "version": "1.0",
         "seed": args.seed,
+        "max_context_tokens": MAX_CONTEXT_TOKENS,
         "total_tasks": len(all_tasks),
         "tasks": all_tasks,
     }
