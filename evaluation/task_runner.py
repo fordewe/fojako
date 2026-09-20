@@ -18,7 +18,7 @@ Usage:
         --datasets evaluation/datasets.json \
         --output evaluation/results/rq2_responses.json \
         --condition full|summary|hybrid \
-        --model claude-sonnet-4-20250514
+        --model claude-sonnet-5
 
     # Build every context and report its token cost without calling the API:
     ... --condition full --dry-run
@@ -372,8 +372,8 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="claude-sonnet-4-20250514",
-        help="Claude model to use",
+        default="claude-sonnet-5",
+        help="Claude model id, e.g. claude-haiku-4-5 / claude-sonnet-5 / claude-opus-5",
     )
     parser.add_argument(
         "--project",
@@ -408,8 +408,14 @@ def main():
         with open(output_path) as f:
             existing = json.load(f)
 
-    # Keyed so a re-run replaces a row instead of appending a duplicate.
-    by_key = {(r["task_id"], r["condition"]): r for r in existing}
+    # Keyed so a re-run replaces a row instead of appending a duplicate. The
+    # model is part of the key: the same task under the same condition is a
+    # different observation on a different model, and the evaluation sweeps
+    # several capability tiers.
+    def key(row):
+        return (row["task_id"], row["condition"], row.get("model", ""))
+
+    by_key = {key(r): r for r in existing}
     already = set(by_key)
 
     contexts: dict[str, dict] = {}  # built once per project, reused by every task
@@ -422,7 +428,7 @@ def main():
             continue
 
         task_id = task["id"]
-        if (task_id, args.condition) in already and not args.overwrite:
+        if (task_id, args.condition, args.model) in already and not args.overwrite:
             skipped += 1
             continue
 
@@ -442,6 +448,7 @@ def main():
             "category": task["category"],
             "question": task["question"],
             "condition": args.condition,
+            "model": args.model,
         }
 
         if not ctx["ok"]:
@@ -485,7 +492,7 @@ def main():
             results.append({**base, "error": f"{type(e).__name__}: {e}"})
 
     for row in results:
-        by_key[(row["task_id"], row["condition"])] = row
+        by_key[key(row)] = row
 
     if args.dry_run:
         _report(results, args.condition, skipped, dry_run=True)

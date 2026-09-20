@@ -37,14 +37,17 @@ COMPLETENESS:
 """
 
 
-def load_existing_scores(path: Path) -> set[tuple[str, str]]:
-    """Load already-scored (task_id, condition) pairs."""
+def load_existing_scores(path: Path) -> set[tuple[str, str, str]]:
+    """Load already-scored (task_id, condition, model) triples.
+
+    The model is part of the key because the same task under the same condition
+    is a separate observation on each model in the capability sweep.
+    """
     scored = set()
     if path.exists():
         with open(path) as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                scored.add((row["task_id"], row["condition"]))
+            for row in csv.DictReader(f):
+                scored.add((row["task_id"], row["condition"], row.get("model", "")))
     return scored
 
 
@@ -86,7 +89,9 @@ def main():
     output_path = Path(args.output)
     scored = load_existing_scores(output_path)
     remaining = [
-        r for r in responses if (r["task_id"], r["condition"]) not in scored
+        r
+        for r in responses
+        if (r["task_id"], r["condition"], r.get("model", "")) not in scored
     ]
 
     if not remaining:
@@ -132,6 +137,7 @@ def main():
                 {
                     "task_id": resp["task_id"],
                     "condition": resp["condition"],
+                    "model": resp.get("model", ""),
                     "accuracy_score": acc,
                     "completeness_score": comp,
                     "notes": notes,
@@ -151,6 +157,7 @@ def main():
                 fieldnames=[
                     "task_id",
                     "condition",
+                    "model",
                     "accuracy_score",
                     "completeness_score",
                     "notes",
