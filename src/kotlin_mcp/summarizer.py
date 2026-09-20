@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 
-from .parsers.base import FileSummary, ClassInfo, FunctionInfo
+from .parsers.base import FileSummary, ClassInfo, FunctionInfo, PropertyInfo
 from .parsers.kotlin import KotlinParser
 from .parsers.java import JavaParser
 
@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 SKIP_PATTERNS = {"BuildConfig.kt", "R.java", "BR.java"}
 SKIP_SUFFIXES = {"Binding.kt", "Binding.java"}
 SKIP_TEST_SUFFIXES = {"Test.kt", "Test.java", "Spec.kt", "Spec.java"}
+
+# Build output, VCS and IDE directories. Only pruned outside a src/ tree:
+# "build" and "out" are plausible package names inside one.
+SKIP_DIRS = {".gradle", ".git", ".idea", "build", "out", "node_modules"}
 
 _kotlin_parser = KotlinParser()
 _java_parser = JavaParser()
@@ -85,16 +89,32 @@ def _auto_save(root: Path, output: str) -> None:
         logger.warning("Failed to save summary to %s: %s", root / ".kotlin-summary", e)
 
 
+def _is_test_source_set(parent_name: str, dir_name: str) -> bool:
+    """True for src/test, src/androidTest, src/commonTest and friends.
+
+    Matched against the source-set level only, so a package named "test" deeper
+    inside a source tree is left alone.
+    """
+    return parent_name == "src" and dir_name.lower().endswith("test")
+
+
 def _collect_files(root: Path, depth: int | None) -> list[Path]:
     files: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        # Skip our own output directory
-        if ".kotlin-summary" in dirnames:
-            dirnames.remove(".kotlin-summary")
+        here = Path(dirpath)
+        rel_parts = here.relative_to(root).parts
+        inside_src = "src" in rel_parts
+
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if d != ".kotlin-summary"
+            and not _is_test_source_set(here.name, d)
+            and not (not inside_src and d in SKIP_DIRS)
+        ]
 
         if depth is not None:
-            rel = Path(dirpath).relative_to(root)
-            if len(rel.parts) >= depth:
+            if len(rel_parts) >= depth:
                 dirnames.clear()
                 continue
 
@@ -131,7 +151,13 @@ def _format_summary(s: FileSummary) -> str:
         for fn in s.top_level_functions:
             lines.append(_format_function(fn, indent="  "))
 
-    ext_imports = [i for i in s.imports if not i.startswith(s.package + ".") if s.package]
+    if s.top_level_properties:
+        lines.append("")
+        lines.append("Properties:")
+        for prop in s.top_level_properties:
+            lines.append(_format_property(prop, indent="  "))
+
+    ext_imports = [i for i in s.imports if not s.package or not i.startswith(s.package + ".")]
     if ext_imports:
         lines.append("")
         lines.append("Imports (external):")
@@ -155,6 +181,9 @@ def _format_class(cls: ClassInfo) -> str:
     else:
         lines.append(header)
 
+    for prop in cls.properties:
+        lines.append(_format_property(prop, indent="    "))
+
     for fn in cls.functions:
         lines.append(_format_function(fn, indent="    "))
 
@@ -170,3 +199,11 @@ def _format_function(fn: FunctionInfo, indent: str = "  ") -> str:
     ret = f": {fn.return_type}" if fn.return_type else ""
     private_mark = "  ← private" if fn.is_private else ""
     return f"{indent}{prefix} {ann_str}{suspend}{fn.name}({params_str}){ret}{private_mark}"
+
+
+def _format_property(p: PropertyInfo, indent: str = "  ") -> str:
+    prefix = "-" if p.is_private else "+"
+    keyword = "var" if p.is_mutable else "val"
+    type_str = f": {p.type}" if p.type else ""
+    private_mark = "  \u2190 private" if p.is_private else ""
+    return f"{indent}{prefix} {keyword} {p.name}{type_str}{private_mark}"
