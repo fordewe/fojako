@@ -1,7 +1,7 @@
 import tree_sitter_kotlin as tskotlin
 from tree_sitter import Language, Parser, Node
 
-from .base import BaseParser, ClassInfo, FileSummary, FunctionInfo
+from .base import BaseParser, ClassInfo, FileSummary, FunctionInfo, PropertyInfo
 
 KT_LANGUAGE = Language(tskotlin.language())
 
@@ -21,6 +21,7 @@ class KotlinParser(BaseParser):
         imports = self._extract_imports(root)
         classes = self._extract_classes(root)
         top_funcs = self._extract_top_level_functions(root)
+        top_props = self._extract_top_level_properties(root)
 
         return FileSummary(
             file_name=file_name,
@@ -30,6 +31,7 @@ class KotlinParser(BaseParser):
             imports=imports,
             has_syntax_errors=len(errors) > 0,
             error_snippets=errors,
+            top_level_properties=top_props,
         )
 
     def _collect_errors(self, node: Node, source: str, errors: list[str]) -> None:
@@ -102,9 +104,11 @@ class KotlinParser(BaseParser):
                 constructor_params = self._extract_constructor_params(child)
 
         # Functions from class body
+        properties: list[PropertyInfo] = []
         for child in node.children:
             if child.type == "class_body":
                 functions = self._extract_functions_from_body(child)
+                properties = self._extract_properties_from_body(child)
 
         return ClassInfo(
             name=name,
@@ -112,6 +116,7 @@ class KotlinParser(BaseParser):
             constructor_params=constructor_params,
             functions=functions,
             annotations=annotations,
+            properties=properties,
         )
 
     def _parse_object(self, node: Node) -> ClassInfo:
@@ -122,9 +127,11 @@ class KotlinParser(BaseParser):
 
         annotations = self._get_annotations(node)
         functions: list[FunctionInfo] = []
+        properties: list[PropertyInfo] = []
         for child in node.children:
             if child.type == "class_body":
                 functions = self._extract_functions_from_body(child)
+                properties = self._extract_properties_from_body(child)
 
         return ClassInfo(
             name=name,
@@ -132,6 +139,7 @@ class KotlinParser(BaseParser):
             constructor_params=[],
             functions=functions,
             annotations=annotations,
+            properties=properties,
         )
 
     def _get_modifiers(self, node: Node) -> list[str]:
@@ -181,6 +189,45 @@ class KotlinParser(BaseParser):
             if child.type == "function_declaration":
                 functions.append(self._parse_function(child))
         return functions
+
+    def _extract_properties_from_body(self, body: Node) -> list[PropertyInfo]:
+        properties: list[PropertyInfo] = []
+        for child in body.children:
+            if child.type == "property_declaration":
+                properties.append(self._parse_property(child))
+        return properties
+
+    def _extract_top_level_properties(self, root: Node) -> list[PropertyInfo]:
+        properties: list[PropertyInfo] = []
+        for child in root.children:
+            if child.type == "property_declaration":
+                properties.append(self._parse_property(child))
+        return properties
+
+    def _parse_property(self, node: Node) -> PropertyInfo:
+        modifiers = self._get_modifiers(node)
+        is_private = "private" in modifiers
+        is_mutable = any(child.type == "var" for child in node.children)
+
+        name = ""
+        prop_type = ""
+        for child in node.children:
+            if child.type != "variable_declaration":
+                continue
+            for sub in child.children:
+                if sub.type in ("identifier", "simple_identifier") and not name:
+                    name = sub.text.decode()
+                elif sub.type in ("user_type", "nullable_type", "function_type",
+                                  "type_identifier"):
+                    prop_type = sub.text.decode()
+            break
+
+        return PropertyInfo(
+            name=name,
+            type=prop_type,
+            is_private=is_private,
+            is_mutable=is_mutable,
+        )
 
     def _parse_function(self, node: Node) -> FunctionInfo:
         name = ""

@@ -99,12 +99,13 @@ class JavaParser(BaseParser):
     def _parse_enum(self, node: Node) -> ClassInfo:
         name = self._get_name(node)
         annotations = self._get_annotations(node)
+        functions = self._extract_methods(node)
 
         return ClassInfo(
             name=name,
             kind="enum",
             constructor_params=[],
-            functions=[],
+            functions=functions,
             annotations=annotations,
         )
 
@@ -154,6 +155,11 @@ class JavaParser(BaseParser):
         for child in body.children:
             if child.type == "method_declaration":
                 functions.append(self._parse_method(child))
+            elif child.type == "enum_body_declarations":
+                # Enum methods sit one level deeper, after the constant list.
+                for sub in child.children:
+                    if sub.type == "method_declaration":
+                        functions.append(self._parse_method(sub))
         return functions
 
     def _parse_method(self, node: Node) -> FunctionInfo:
