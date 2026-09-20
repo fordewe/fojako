@@ -17,17 +17,17 @@ from pathlib import Path
 # Add project root to path so we can import kotlin_mcp
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from kotlin_mcp.summarizer import (
-    summarize_file,
-    _collect_files,
-    SKIP_PATTERNS,
-    SKIP_SUFFIXES,
-    SKIP_TEST_SUFFIXES,
-)
-from token_counter import compute_metrics, count_tokens_tiktoken
+from kotlin_mcp.summarizer import _collect_files, _format_summary
+from kotlin_mcp.parsers.base import FileSummary
+from kotlin_mcp.parsers.java import JavaParser
+from kotlin_mcp.parsers.kotlin import KotlinParser
+from token_counter import compute_metrics
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+_kotlin_parser = KotlinParser()
+_java_parser = JavaParser()
 
 CSV_HEADERS = [
     "project",
@@ -47,6 +47,7 @@ CSV_HEADERS = [
     "information_density",
     "num_classes",
     "num_functions",
+    "num_properties",
 ]
 
 
@@ -59,43 +60,22 @@ def classify_project_size(file_count: int) -> str:
         return "large"
 
 
-def count_structural_from_source(source: str, suffix: str) -> tuple[int, int]:
-    """Rough count of classes and functions from source for metadata."""
-    num_classes = 0
-    num_functions = 0
-    for line in source.split("\n"):
-        stripped = line.strip()
-        if suffix == ".kt":
-            if any(
-                stripped.startswith(kw)
-                for kw in [
-                    "class ",
-                    "data class ",
-                    "interface ",
-                    "object ",
-                    "enum class ",
-                    "sealed class ",
-                    "abstract class ",
-                    "open class ",
-                    "internal class ",
-                    "private class ",
-                ]
-            ):
-                num_classes += 1
-            if stripped.startswith("fun ") or " fun " in stripped:
-                num_functions += 1
-        else:  # .java
-            if any(
-                kw in stripped
-                for kw in [
-                    "class ",
-                    "interface ",
-                    "enum ",
-                ]
-            ):
-                if not stripped.startswith("//") and not stripped.startswith("*"):
-                    num_classes += 1
-    return num_classes, num_functions
+def count_structural_elements(parsed: FileSummary) -> tuple[int, int, int]:
+    """Count classes, functions and properties from the parsed structure.
+
+    These are the declarations that make up a structural element for the ID
+    metric. Counting from the parse tree rather than the formatted text means
+    annotated declarations are not missed. The parsers do not descend into
+    nested classes, so those are not counted here either.
+    """
+    num_classes = len(parsed.classes)
+    num_functions = sum(len(c.functions) for c in parsed.classes) + len(
+        parsed.top_level_functions
+    )
+    num_properties = sum(len(c.properties) for c in parsed.classes) + len(
+        parsed.top_level_properties
+    )
+    return num_classes, num_functions, num_properties
 
 
 def process_project(
@@ -113,15 +93,17 @@ def process_project(
     for file_path in sorted(files):
         try:
             source = file_path.read_text(encoding="utf-8", errors="replace")
-            summary = summarize_file(str(file_path))
+            parser = _kotlin_parser if file_path.suffix == ".kt" else _java_parser
+            parsed = parser.parse(source, file_name=file_path.name)
+            summary = _format_summary(parsed)
 
-            if summary.startswith("Error:"):
-                logger.warning("Skipping %s: %s", file_path, summary)
-                continue
-
-            metrics = compute_metrics(source, summary)
-            num_classes, num_functions = count_structural_from_source(
-                source, file_path.suffix
+            num_classes, num_functions, num_properties = count_structural_elements(
+                parsed
+            )
+            metrics = compute_metrics(
+                source,
+                summary,
+                structural_elements=num_classes + num_functions + num_properties,
             )
 
             rows.append(
@@ -133,6 +115,7 @@ def process_project(
                     "language": "kotlin" if file_path.suffix == ".kt" else "java",
                     "num_classes": num_classes,
                     "num_functions": num_functions,
+                    "num_properties": num_properties,
                     **metrics,
                 }
             )

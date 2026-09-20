@@ -30,8 +30,15 @@ def count_lines(text: str) -> int:
     return text.count("\n") + (1 if text and not text.endswith("\n") else 0)
 
 
-def compute_metrics(original: str, summary: str) -> dict:
+def compute_metrics(original: str, summary: str, structural_elements: int) -> dict:
     """Compute all compression metrics between original source and its summary.
+
+    A structural element is one declaration the summary carries: a class, a
+    method, or a property. Imports and the Package/File header lines are not
+    counted — they are not declarations owned by the file, and their number
+    would swamp the count in small files, making ID incomparable across files.
+    The caller derives the count from the parsed FileSummary, not from the
+    formatted text, so annotated declarations are not missed.
 
     Returns dict with:
         - original_chars, summary_chars
@@ -39,7 +46,7 @@ def compute_metrics(original: str, summary: str) -> dict:
         - original_lines, summary_lines
         - compression_ratio (CR): summary_tokens / original_tokens
         - token_reduction_rate (TRR): 1 - CR
-        - structural_elements: count of structural markers in summary
+        - structural_elements: as passed in
         - information_density (ID): structural_elements / summary_tokens
     """
     orig_tokens = count_tokens_tiktoken(original)
@@ -47,26 +54,6 @@ def compute_metrics(original: str, summary: str) -> dict:
 
     cr = summ_tokens / orig_tokens if orig_tokens > 0 else 0.0
     trr = 1.0 - cr
-
-    # Count structural elements: classes, functions, packages, imports
-    structural_elements = 0
-    for line in summary.split("\n"):
-        stripped = line.strip()
-        if any(
-            stripped.startswith(kw)
-            for kw in [
-                "class ",
-                "data class ",
-                "interface ",
-                "object ",
-                "enum ",
-                "+ ",
-                "- ",
-                "Package:",
-                "File:",
-            ]
-        ):
-            structural_elements += 1
 
     id_score = structural_elements / summ_tokens if summ_tokens > 0 else 0.0
 
