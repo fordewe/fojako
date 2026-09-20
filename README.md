@@ -15,19 +15,19 @@ Local MCP server that summarizes Kotlin and Java source files into compact struc
 
 ```bash
 # Run directly (no install needed)
-uvx --from "git+https://github.com/mafmudin/fojako.git" kotlin-mcp
+uvx --from "git+https://github.com/fordewe/fojako.git" kotlin-mcp
 
 # Pin to a specific version
-uvx --from "git+https://github.com/mafmudin/fojako.git@v0.1.0" kotlin-mcp
+uvx --from "git+https://github.com/fordewe/fojako.git@v0.1.0" kotlin-mcp
 
 # Or install persistently as a global CLI tool
-uv tool install "git+https://github.com/mafmudin/fojako.git"
+uv tool install "git+https://github.com/fordewe/fojako.git"
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/mafmudin/fojako.git
+git clone https://github.com/fordewe/fojako.git
 cd kotlin-mcp
 uv tool install .
 ```
@@ -45,7 +45,7 @@ Add a `.mcp.json` file at the root of your project:
   "mcpServers": {
     "kotlin-summarizer": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/mafmudin/fojako.git", "kotlin-mcp"]
+      "args": ["--from", "git+https://github.com/fordewe/fojako.git", "kotlin-mcp"]
     }
   }
 }

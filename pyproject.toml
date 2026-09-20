@@ -26,8 +26,8 @@ eval = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mafmudin/fojako"
-Repository = "https://github.com/mafmudin/fojako"
+Homepage = "https://github.com/fordewe/fojako"
+Repository = "https://github.com/fordewe/fojako"
 
 [build-system]
 requires = ["hatchling"]

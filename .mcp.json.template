@@ -2,7 +2,7 @@
   "mcpServers": {
     "kotlin-summarizer": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/mafmudin/fojako.git", "kotlin-mcp"]
+      "args": ["--from", "git+https://github.com/fordewe/fojako.git", "kotlin-mcp"]
     }
   }
 }
