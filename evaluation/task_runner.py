@@ -224,8 +224,9 @@ def run_task_hybrid(
 
             result2 = _call_api(client, model, messages)
             # Combine token usage
-            result2["input_tokens"] += result["input_tokens"]
-            result2["output_tokens"] += result["output_tokens"]
+            for k in ("input_tokens", "output_tokens",
+                      "cache_read_tokens", "cache_write_tokens"):
+                result2[k] += result[k]
             result2["files_requested"] = requested_files
             result2["turns"] = 2
             result2["attempts"] += result["attempts"]
@@ -328,10 +329,16 @@ def _call_api(
 
         elapsed = time.time() - start
         text = "".join(b.text for b in response.content if b.type == "text")
+        # Recorded so the paper's "no prompt cache" claim can be checked from
+        # the results rather than taken on trust: both stay zero while
+        # cache_control is absent from the request.
+        usage = response.usage
         return {
             "response": text,
-            "input_tokens": response.usage.input_tokens,
-            "output_tokens": response.usage.output_tokens,
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "cache_read_tokens": getattr(usage, "cache_read_input_tokens", 0) or 0,
+            "cache_write_tokens": getattr(usage, "cache_creation_input_tokens", 0) or 0,
             "latency_seconds": round(elapsed, 2),
             "model": model,
             "temperature": TEMPERATURE,
