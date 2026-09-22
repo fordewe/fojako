@@ -28,6 +28,7 @@ import argparse
 import json
 import logging
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -204,14 +205,9 @@ def run_task_hybrid(
     # Check if the model requested files
     response_text = result["response"]
     if "REQUEST_FILES:" in response_text:
-        requested_line = ""
-        for line in response_text.split("\n"):
-            if "REQUEST_FILES:" in line:
-                requested_line = line.split("REQUEST_FILES:")[-1].strip()
-                break
+        requested_files = _parse_requested_files(response_text)
 
-        if requested_line:
-            requested_files = [f.strip() for f in requested_line.split(",")]
+        if requested_files:
             file_contents, resolution = _load_requested_files(
                 module_path, module_files, requested_files
             )
@@ -226,8 +222,12 @@ def run_task_hybrid(
 
             result2 = _call_api(client, model, messages)
             # Combine token usage
-            for k in ("input_tokens", "output_tokens",
-                      "cache_read_tokens", "cache_write_tokens"):
+            # billed_input_tokens and thinking_tokens were left out here, so a
+            # two-call Hybrid task reported only its second call and the
+            # condition looked as cheap as Summary.
+            for k in ("input_tokens", "output_tokens", "cache_read_tokens",
+                      "cache_write_tokens", "billed_input_tokens",
+                      "thinking_tokens"):
                 result2[k] += result[k]
             result2["files_requested"] = requested_files
             result2["turns"] = 2
@@ -241,6 +241,33 @@ def run_task_hybrid(
     result["files_ambiguous"] = []
     result["files_missing"] = []
     return result
+
+
+_FILE_TOKEN = re.compile(r"[\w./\-]+\.(?:kt|java)\b")
+
+
+def _parse_requested_files(text: str) -> list[str]:
+    """Pull file names out of a REQUEST_FILES reply.
+
+    Models decorate the marker with markdown, spread the list over several
+    lines, and append prose: "** `Scrollbar.kt` (full implementation)". Taking
+    one line and splitting it on commas captured "**" and nothing else, so the
+    second turn arrived without the file the model had asked for and Hybrid
+    degraded into Summary plus a wasted round trip. Scanning the text after the
+    marker for things that actually look like Kotlin or Java paths survives the
+    decoration, the line breaks and the prose alike.
+    """
+    idx = text.upper().find("REQUEST_FILES")
+    if idx < 0:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for m in _FILE_TOKEN.finditer(text[idx:]):
+        name = m.group(0).lstrip("./")
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out
 
 
 def _load_requested_files(
@@ -275,13 +302,16 @@ def _load_requested_files(
 
     for raw in requested:
         name = raw.strip().lstrip("./")
+        # A model often gives a path rooted somewhere other than this module,
+        # so the bare file name is the fallback the exact path cannot cover.
+        base = Path(name).name
         if name in by_rel:
             emit(by_rel[name])
-        elif len(by_name.get(name, [])) == 1:
-            emit(by_name[name][0])
-        elif by_name.get(name):
-            ambiguous.append(name)
-            for candidate in by_name[name]:
+        elif len(by_name.get(base, [])) == 1:
+            emit(by_name[base][0])
+        elif by_name.get(base):
+            ambiguous.append(base)
+            for candidate in by_name[base]:
                 emit(candidate)
         else:
             missing.append(name)
