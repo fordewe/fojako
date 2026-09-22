@@ -452,6 +452,25 @@ def main():
     results = []
     skipped = 0
 
+    def flush() -> None:
+        """Persist what has been collected so far.
+
+        Called after every task. Writing once at the end of a condition means a
+        process that dies on the last task loses every response before it, and
+        those responses cost real quota. Written to a temporary file and then
+        renamed so a crash during the write cannot leave a truncated file
+        behind.
+        """
+        if args.dry_run:
+            return
+        for row in results:
+            by_key[key(row)] = row
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = output_path.with_suffix(output_path.suffix + ".tmp")
+        with open(tmp, "w") as f:
+            json.dump(list(by_key.values()), f, indent=2)
+        tmp.replace(output_path)
+
     for task in tasks_data["tasks"]:
         project_name = task["project"]
         if args.project and project_name != args.project:
@@ -488,6 +507,7 @@ def main():
             results.append({**base, "error": ctx["reason"], **{
                 k: v for k, v in ctx.items() if k not in ("ok", "reason")
             }})
+            flush()
             continue
 
         base |= {
@@ -520,17 +540,15 @@ def main():
         except Exception as e:
             logger.error("Error on task %s: %s", task_id, e)
             results.append({**base, "error": f"{type(e).__name__}: {e}"})
-
-    for row in results:
-        by_key[key(row)] = row
+        flush()
 
     if args.dry_run:
+        for row in results:
+            by_key[key(row)] = row
         _report(results, args.condition, skipped, dry_run=True)
         return
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump(list(by_key.values()), f, indent=2)
+    flush()
     logger.info("Wrote %d rows to %s", len(by_key), output_path)
 
     _report(results, args.condition, skipped)
