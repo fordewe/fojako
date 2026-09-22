@@ -7,7 +7,15 @@
       "path": "~/evaluation-datasets/nowinandroid",
       "size_category": "large",
       "description": "Google's official modular Android app sample (MVVM, Compose, Hilt, Kotlin coroutines)",
-      "patterns": ["Compose UI", "Hilt DI", "coroutines", "MVVM", "multi-module"]
+      "patterns": [
+        "Compose UI",
+        "Hilt DI",
+        "coroutines",
+        "MVVM",
+        "multi-module"
+      ],
+      "commit": "12f80da6518e161ed16a06a68e71fb8a873576d6",
+      "commit_date": "2026-09-02"
     },
     {
       "name": "tivi",
@@ -15,7 +23,15 @@
       "path": "~/evaluation-datasets/tivi",
       "size_category": "large",
       "description": "TV show tracking app (multi-module, Compose, Circuit, SQLDelight)",
-      "patterns": ["Compose UI", "Circuit", "SQLDelight", "multi-module", "coroutines"]
+      "patterns": [
+        "Compose UI",
+        "Circuit",
+        "SQLDelight",
+        "multi-module",
+        "coroutines"
+      ],
+      "commit": "a0c62c2c763c83e3a0ecf79b283224374bb06c4a",
+      "commit_date": "2024-11-12"
     },
     {
       "name": "compose-samples",
@@ -23,7 +39,13 @@
       "path": "~/evaluation-datasets/compose-samples",
       "size_category": "large",
       "description": "Official Compose sample apps collection",
-      "patterns": ["Compose UI", "various architectures", "Material Design"]
+      "patterns": [
+        "Compose UI",
+        "various architectures",
+        "Material Design"
+      ],
+      "commit": "0bbd72d69834ec86a9a72bd3513118755fb286c5",
+      "commit_date": "2026-09-18"
     },
     {
       "name": "sunflower",
@@ -31,7 +53,14 @@
       "path": "~/evaluation-datasets/sunflower",
       "size_category": "small",
       "description": "Android Jetpack sample (Room, WorkManager, Navigation)",
-      "patterns": ["Room", "WorkManager", "MVVM", "data class"]
+      "patterns": [
+        "Room",
+        "WorkManager",
+        "MVVM",
+        "data class"
+      ],
+      "commit": "2a357a31551bb53f3fe80382a9ce6d30bcc8b960",
+      "commit_date": "2024-08-02"
     },
     {
       "name": "architecture-components-samples",
@@ -39,7 +68,15 @@
       "path": "~/evaluation-datasets/architecture-components-samples",
       "size_category": "medium",
       "description": "Android Architecture Components samples (various patterns)",
-      "patterns": ["LiveData", "ViewModel", "Room", "Paging", "various"]
+      "patterns": [
+        "LiveData",
+        "ViewModel",
+        "Room",
+        "Paging",
+        "various"
+      ],
+      "commit": "e849ce3004ccd1132a121cf513bbcb7996d95c30",
+      "commit_date": "2023-07-01"
     }
   ]
 }

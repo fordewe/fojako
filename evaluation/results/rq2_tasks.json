@@ -1,0 +1,647 @@
+{
+  "version": "1.0",
+  "seed": 42,
+  "max_context_tokens": 180000,
+  "total_tasks": 71,
+  "tasks": [
+    {
+      "id": "nowinandroid_nav_01",
+      "project": "nowinandroid",
+      "category": "navigation",
+      "template_id": "nav_01",
+      "question": "Where is the class `NiaNavigationSuiteScope` defined? Provide the file path and package.",
+      "difficulty": "easy",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_nav_03",
+      "project": "nowinandroid",
+      "category": "navigation",
+      "template_id": "nav_03",
+      "question": "List all public methods of class `NiaNavigationSuiteScope`.",
+      "difficulty": "easy",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_nav_04",
+      "project": "nowinandroid",
+      "category": "navigation",
+      "template_id": "nav_04",
+      "question": "What are the constructor dependencies of `ScrollThumbNode`?",
+      "difficulty": "easy",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_und_02",
+      "project": "nowinandroid",
+      "category": "understanding",
+      "template_id": "und_02",
+      "question": "What design patterns are used in this module? List them with the classes involved.",
+      "difficulty": "medium",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_und_03",
+      "project": "nowinandroid",
+      "category": "understanding",
+      "template_id": "und_03",
+      "question": "Describe the relationship between `ScrollbarState` and `ScrollbarStateValue`.",
+      "difficulty": "medium",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_und_04",
+      "project": "nowinandroid",
+      "category": "understanding",
+      "template_id": "und_04",
+      "question": "Based on its signature and context, what does the function `navigationContentColor` in `NiaNavigationDefaults` do?",
+      "difficulty": "medium",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_und_05",
+      "project": "nowinandroid",
+      "category": "understanding",
+      "template_id": "und_05",
+      "question": "Identify the architectural layers in this module and the key classes in each layer.",
+      "difficulty": "medium",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_mod_01",
+      "project": "nowinandroid",
+      "category": "modification",
+      "template_id": "mod_01",
+      "question": "Which files need to change to add a new API endpoint for `NiaNavigationSuiteScope`?",
+      "difficulty": "hard",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_mod_02",
+      "project": "nowinandroid",
+      "category": "modification",
+      "template_id": "mod_02",
+      "question": "Where should I add a new repository class for `NiaIcons`?",
+      "difficulty": "medium",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_mod_03",
+      "project": "nowinandroid",
+      "category": "modification",
+      "template_id": "mod_03",
+      "question": "What would break if I rename `NiaTagDefaults` to `NiaTagDefaultsV2`?",
+      "difficulty": "hard",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_mod_04",
+      "project": "nowinandroid",
+      "category": "modification",
+      "template_id": "mod_04",
+      "question": "Plan the implementation of a caching layer for network responses. Which classes and files are involved?",
+      "difficulty": "hard",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "nowinandroid_mod_05",
+      "project": "nowinandroid",
+      "category": "modification",
+      "template_id": "mod_05",
+      "question": "Identify where to add error handling for network calls in this module.",
+      "difficulty": "medium",
+      "module": "core/designsystem"
+    },
+    {
+      "id": "tivi_nav_01",
+      "project": "tivi",
+      "category": "navigation",
+      "template_id": "nav_01",
+      "question": "Where is the class `Layout` defined? Provide the file path and package.",
+      "difficulty": "easy",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_nav_03",
+      "project": "tivi",
+      "category": "navigation",
+      "template_id": "nav_03",
+      "question": "List all public methods of class `UiMessageManager`.",
+      "difficulty": "easy",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_nav_04",
+      "project": "tivi",
+      "category": "navigation",
+      "template_id": "nav_04",
+      "question": "What are the constructor dependencies of `DatePickerViewController`?",
+      "difficulty": "easy",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_nav_05",
+      "project": "tivi",
+      "category": "navigation",
+      "template_id": "nav_05",
+      "question": "Which package contains the UI layer?",
+      "difficulty": "medium",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_und_01",
+      "project": "tivi",
+      "category": "understanding",
+      "template_id": "und_01",
+      "question": "Explain the data flow from data source to UI in this module.",
+      "difficulty": "hard",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_und_02",
+      "project": "tivi",
+      "category": "understanding",
+      "template_id": "und_02",
+      "question": "What design patterns are used in this module? List them with the classes involved.",
+      "difficulty": "medium",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_und_03",
+      "project": "tivi",
+      "category": "understanding",
+      "template_id": "und_03",
+      "question": "Describe the relationship between `DatePickerViewController` and `ControlLambdaTarget`.",
+      "difficulty": "medium",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_und_04",
+      "project": "tivi",
+      "category": "understanding",
+      "template_id": "und_04",
+      "question": "Based on its signature and context, what does the function `calculatePrimaryColor` in `ColorExtractor` do?",
+      "difficulty": "medium",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_und_05",
+      "project": "tivi",
+      "category": "understanding",
+      "template_id": "und_05",
+      "question": "Identify the architectural layers in this module and the key classes in each layer.",
+      "difficulty": "medium",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_mod_01",
+      "project": "tivi",
+      "category": "modification",
+      "template_id": "mod_01",
+      "question": "Which files need to change to add a new API endpoint for `UiMessageManager`?",
+      "difficulty": "hard",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_mod_02",
+      "project": "tivi",
+      "category": "modification",
+      "template_id": "mod_02",
+      "question": "Where should I add a new repository class for `Layout`?",
+      "difficulty": "medium",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_mod_03",
+      "project": "tivi",
+      "category": "modification",
+      "template_id": "mod_03",
+      "question": "What would break if I rename `DatePickerViewController` to `DatePickerViewControllerV2`?",
+      "difficulty": "hard",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_mod_04",
+      "project": "tivi",
+      "category": "modification",
+      "template_id": "mod_04",
+      "question": "Plan the implementation of a caching layer for network responses. Which classes and files are involved?",
+      "difficulty": "hard",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "tivi_mod_05",
+      "project": "tivi",
+      "category": "modification",
+      "template_id": "mod_05",
+      "question": "Identify where to add error handling for network calls in this module.",
+      "difficulty": "medium",
+      "module": "common/ui/compose"
+    },
+    {
+      "id": "compose-samples_nav_01",
+      "project": "compose-samples",
+      "category": "navigation",
+      "template_id": "nav_01",
+      "question": "Where is the class `JetnewsGlanceColorScheme` defined? Provide the file path and package.",
+      "difficulty": "easy",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_nav_02",
+      "project": "compose-samples",
+      "category": "navigation",
+      "template_id": "nav_02",
+      "question": "What classes implement the interface `DeepLinkKey`?",
+      "difficulty": "easy",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_nav_03",
+      "project": "compose-samples",
+      "category": "navigation",
+      "template_id": "nav_03",
+      "question": "List all public methods of class `BlockingFakePostsRepository`.",
+      "difficulty": "easy",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_nav_04",
+      "project": "compose-samples",
+      "category": "navigation",
+      "template_id": "nav_04",
+      "question": "What are the constructor dependencies of `TopicSelection`?",
+      "difficulty": "easy",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_nav_05",
+      "project": "compose-samples",
+      "category": "navigation",
+      "template_id": "nav_05",
+      "question": "Which package contains the data layer?",
+      "difficulty": "medium",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_und_01",
+      "project": "compose-samples",
+      "category": "understanding",
+      "template_id": "und_01",
+      "question": "Explain the data flow from API to UI in this module.",
+      "difficulty": "hard",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_und_02",
+      "project": "compose-samples",
+      "category": "understanding",
+      "template_id": "und_02",
+      "question": "What design patterns are used in this module? List them with the classes involved.",
+      "difficulty": "medium",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_und_03",
+      "project": "compose-samples",
+      "category": "understanding",
+      "template_id": "und_03",
+      "question": "Describe the relationship between `Publication` and `Paragraph`.",
+      "difficulty": "medium",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_und_04",
+      "project": "compose-samples",
+      "category": "understanding",
+      "template_id": "und_04",
+      "question": "Based on its signature and context, what does the function `Header` in `JetnewsGlanceAppWidget` do?",
+      "difficulty": "medium",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_und_05",
+      "project": "compose-samples",
+      "category": "understanding",
+      "template_id": "und_05",
+      "question": "Identify the architectural layers in this module and the key classes in each layer.",
+      "difficulty": "medium",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_mod_01",
+      "project": "compose-samples",
+      "category": "modification",
+      "template_id": "mod_01",
+      "question": "Which files need to change to add a new API endpoint for `JetnewsApplication`?",
+      "difficulty": "hard",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_mod_02",
+      "project": "compose-samples",
+      "category": "modification",
+      "template_id": "mod_02",
+      "question": "Where should I add a new repository class for `KeyDecoder`?",
+      "difficulty": "medium",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_mod_03",
+      "project": "compose-samples",
+      "category": "modification",
+      "template_id": "mod_03",
+      "question": "What would break if I rename `PopUpTo` to `PopUpToV2`?",
+      "difficulty": "hard",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_mod_04",
+      "project": "compose-samples",
+      "category": "modification",
+      "template_id": "mod_04",
+      "question": "Plan the implementation of a caching layer for network responses. Which classes and files are involved?",
+      "difficulty": "hard",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "compose-samples_mod_05",
+      "project": "compose-samples",
+      "category": "modification",
+      "template_id": "mod_05",
+      "question": "Identify where to add error handling for network calls in this module.",
+      "difficulty": "medium",
+      "module": "JetNews/app"
+    },
+    {
+      "id": "sunflower_nav_01",
+      "project": "sunflower",
+      "category": "navigation",
+      "template_id": "nav_01",
+      "question": "Where is the class `PlantRepository` defined? Provide the file path and package.",
+      "difficulty": "easy",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_nav_02",
+      "project": "sunflower",
+      "category": "navigation",
+      "template_id": "nav_02",
+      "question": "What classes implement the interface `PlantDao`?",
+      "difficulty": "easy",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_nav_03",
+      "project": "sunflower",
+      "category": "navigation",
+      "template_id": "nav_03",
+      "question": "List all public methods of class `SeedDatabaseWorker`.",
+      "difficulty": "easy",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_nav_04",
+      "project": "sunflower",
+      "category": "navigation",
+      "template_id": "nav_04",
+      "question": "What are the constructor dependencies of `GardenPlantingListViewModel`?",
+      "difficulty": "easy",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_nav_05",
+      "project": "sunflower",
+      "category": "navigation",
+      "template_id": "nav_05",
+      "question": "Which package contains the data layer?",
+      "difficulty": "medium",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_und_01",
+      "project": "sunflower",
+      "category": "understanding",
+      "template_id": "und_01",
+      "question": "Explain the data flow from API to UI in this module.",
+      "difficulty": "hard",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_und_02",
+      "project": "sunflower",
+      "category": "understanding",
+      "template_id": "und_02",
+      "question": "What design patterns are used in this module? List them with the classes involved.",
+      "difficulty": "medium",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_und_03",
+      "project": "sunflower",
+      "category": "understanding",
+      "template_id": "und_03",
+      "question": "Describe the relationship between `PlantDetailsScroller` and `ToolbarState`.",
+      "difficulty": "medium",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_und_04",
+      "project": "sunflower",
+      "category": "understanding",
+      "template_id": "und_04",
+      "question": "Based on its signature and context, what does the function `updateData` in `PlantListViewModel` do?",
+      "difficulty": "medium",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_und_05",
+      "project": "sunflower",
+      "category": "understanding",
+      "template_id": "und_05",
+      "question": "Identify the architectural layers in this module and the key classes in each layer.",
+      "difficulty": "medium",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_mod_01",
+      "project": "sunflower",
+      "category": "modification",
+      "template_id": "mod_01",
+      "question": "Which files need to change to add a new API endpoint for `UnsplashPhotoUrls`?",
+      "difficulty": "hard",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_mod_02",
+      "project": "sunflower",
+      "category": "modification",
+      "template_id": "mod_02",
+      "question": "Where should I add a new repository class for `GardenPlantingListViewModel`?",
+      "difficulty": "medium",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_mod_03",
+      "project": "sunflower",
+      "category": "modification",
+      "template_id": "mod_03",
+      "question": "What would break if I rename `GardenPlanting` to `GardenPlantingV2`?",
+      "difficulty": "hard",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_mod_04",
+      "project": "sunflower",
+      "category": "modification",
+      "template_id": "mod_04",
+      "question": "Plan the implementation of a caching layer for network responses. Which classes and files are involved?",
+      "difficulty": "hard",
+      "module": "app"
+    },
+    {
+      "id": "sunflower_mod_05",
+      "project": "sunflower",
+      "category": "modification",
+      "template_id": "mod_05",
+      "question": "Identify where to add error handling for network calls in this module.",
+      "difficulty": "medium",
+      "module": "app"
+    },
+    {
+      "id": "architecture-components-samples_nav_01",
+      "project": "architecture-components-samples",
+      "category": "navigation",
+      "template_id": "nav_01",
+      "question": "Where is the class `RepoRepository` defined? Provide the file path and package.",
+      "difficulty": "easy",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_nav_02",
+      "project": "architecture-components-samples",
+      "category": "navigation",
+      "template_id": "nav_02",
+      "question": "What classes implement the interface `GithubService`?",
+      "difficulty": "easy",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_nav_03",
+      "project": "architecture-components-samples",
+      "category": "navigation",
+      "template_id": "nav_03",
+      "question": "List all public methods of class `FetchNextSearchPageTask`.",
+      "difficulty": "easy",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_nav_04",
+      "project": "architecture-components-samples",
+      "category": "navigation",
+      "template_id": "nav_04",
+      "question": "What are the constructor dependencies of `ApiSuccessResponse`?",
+      "difficulty": "easy",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_nav_05",
+      "project": "architecture-components-samples",
+      "category": "navigation",
+      "template_id": "nav_05",
+      "question": "Which package contains the data layer?",
+      "difficulty": "medium",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_und_01",
+      "project": "architecture-components-samples",
+      "category": "understanding",
+      "template_id": "und_01",
+      "question": "Explain the data flow from API to UI in this module.",
+      "difficulty": "hard",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_und_02",
+      "project": "architecture-components-samples",
+      "category": "understanding",
+      "template_id": "und_02",
+      "question": "What design patterns are used in this module? List them with the classes involved.",
+      "difficulty": "medium",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_und_03",
+      "project": "architecture-components-samples",
+      "category": "understanding",
+      "template_id": "und_03",
+      "question": "Describe the relationship between `ApiSuccessResponse` and `ApiErrorResponse`.",
+      "difficulty": "medium",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_und_04",
+      "project": "architecture-components-samples",
+      "category": "understanding",
+      "template_id": "und_04",
+      "question": "Based on its signature and context, what does the function `getFragmentBindingAdapters` in `FragmentDataBindingComponent` do?",
+      "difficulty": "medium",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_und_05",
+      "project": "architecture-components-samples",
+      "category": "understanding",
+      "template_id": "und_05",
+      "question": "Identify the architectural layers in this module and the key classes in each layer.",
+      "difficulty": "medium",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_mod_01",
+      "project": "architecture-components-samples",
+      "category": "modification",
+      "template_id": "mod_01",
+      "question": "Which files need to change to add a new API endpoint for `UserRepository`?",
+      "difficulty": "hard",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_mod_02",
+      "project": "architecture-components-samples",
+      "category": "modification",
+      "template_id": "mod_02",
+      "question": "Where should I add a new repository class for `GithubViewModelFactory`?",
+      "difficulty": "medium",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_mod_03",
+      "project": "architecture-components-samples",
+      "category": "modification",
+      "template_id": "mod_03",
+      "question": "What would break if I rename `LiveDataCallAdapter` to `LiveDataCallAdapterV2`?",
+      "difficulty": "hard",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_mod_04",
+      "project": "architecture-components-samples",
+      "category": "modification",
+      "template_id": "mod_04",
+      "question": "Plan the implementation of a caching layer for network responses. Which classes and files are involved?",
+      "difficulty": "hard",
+      "module": "GithubBrowserSample/app"
+    },
+    {
+      "id": "architecture-components-samples_mod_05",
+      "project": "architecture-components-samples",
+      "category": "modification",
+      "template_id": "mod_05",
+      "question": "Identify where to add error handling for network calls in this module.",
+      "difficulty": "medium",
+      "module": "GithubBrowserSample/app"
+    }
+  ]
+}

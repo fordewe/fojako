@@ -36,6 +36,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import anthropic
 
+from cli_backend import CliBackend, verify_no_file_access
+
 from kotlin_mcp.summarizer import _collect_files, _format_summary
 from kotlin_mcp.parsers.java import JavaParser
 from kotlin_mcp.parsers.kotlin import KotlinParser
@@ -303,6 +305,9 @@ def _call_api(
     task from the run. latency_seconds is wall-clock for the whole call, not
     time-to-first-token — the request is not streamed.
     """
+    if isinstance(client, CliBackend):
+        return client.call(model, messages)
+
     last_error: Exception | None = None
     for attempt in range(MAX_RETRIES):
         start = time.time()
@@ -397,9 +402,27 @@ def main():
         action="store_true",
         help="Build every context and report its token cost without calling the API",
     )
+    parser.add_argument(
+        "--backend",
+        choices=("api", "cli"),
+        default="api",
+        help=(
+            "api: Messages API, needs ANTHROPIC_API_KEY, sets temperature. "
+            "cli: claude -p on a subscription, no temperature control and "
+            "the CLI's own scaffolding lands in the billed token counts"
+        ),
+    )
     args = parser.parse_args()
 
-    client = None if args.dry_run else anthropic.Anthropic()
+    if args.dry_run:
+        client = None
+    elif args.backend == "cli":
+        client = CliBackend(SYSTEM_PROMPT)
+        # The whole design rests on the subject seeing only the context we
+        # built. Check it before spending a run rather than after.
+        verify_no_file_access(client, args.model)
+    else:
+        client = anthropic.Anthropic()
 
     with open(args.tasks) as f:
         tasks_data = json.load(f)
@@ -532,8 +555,20 @@ def _report(results: list[dict], condition: str, skipped: int, dry_run: bool = F
             print(f"Context tokens per task: min {min(tokens):,}  max {max(tokens):,}")
             print(f"Total input tokens if run: {sum(tokens):,}")
         return
-    print(f"Total input tokens:  {sum(r.get('input_tokens', 0) for r in ok):,}")
+    # The CLI backend puts nearly the whole request into the cache fields, so
+    # input_tokens alone reports a few hundred tokens for a run that carried
+    # half a million. Sum what was actually billed.
+    billed = sum(
+        r.get("billed_input_tokens")
+        or (r.get("input_tokens", 0) + r.get("cache_write_tokens", 0)
+            + r.get("cache_read_tokens", 0))
+        for r in ok
+    )
+    print(f"Billed input tokens: {billed:,}")
     print(f"Total output tokens: {sum(r.get('output_tokens', 0) for r in ok):,}")
+    thinking = sum(r.get("thinking_tokens", 0) or 0 for r in ok)
+    if thinking:
+        print(f"  of which thinking: {thinking:,}")
 
 
 if __name__ == "__main__":
