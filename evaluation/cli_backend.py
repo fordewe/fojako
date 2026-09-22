@@ -144,6 +144,11 @@ class CliBackend:
             "temperature": None,
             "stop_reason": payload.get("stop_reason"),
             "num_turns": payload.get("num_turns"),
+            # Reported by the CLI on a list-price basis, so it is not what a
+            # subscription actually pays. Recorded anyway as the provider's own
+            # reading of consumption, next to our arithmetic on the token
+            # fields, so the two can be checked against each other.
+            "reported_cost_usd": payload.get("total_cost_usd"),
             "attempts": attempts,
             "backend": "cli",
         }
