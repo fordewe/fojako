@@ -66,6 +66,9 @@ FIELDNAMES = [
     "task_id", "condition", "model", "category", "project",
     "judge_model", "accuracy_score", "completeness_score",
     "accuracy_evidence", "completeness_evidence", "notes",
+    "billed_input_tokens", "cache_write_tokens", "cache_read_tokens",
+    "output_tokens", "thinking_tokens", "reported_cost_usd",
+    "attempts", "latency_seconds",
 ]
 
 
@@ -122,6 +125,56 @@ def parse_verdict(text: str) -> dict:
     return verdict
 
 
+def build_row(resp: dict, project: str, judge_model: str, verdict: dict, out: dict) -> dict:
+    """Assemble one CSV row, judgement and token usage together.
+
+    Kept separate from the call loop so the token accounting can be tested
+    without mocking the CLI backend.
+    """
+    return {
+        "task_id": resp["task_id"],
+        "condition": resp["condition"],
+        "model": resp.get("model", ""),
+        "category": resp.get("category", ""),
+        "project": project,
+        "judge_model": judge_model,
+        "accuracy_score": verdict["accuracy"],
+        "completeness_score": verdict["completeness"],
+        "accuracy_evidence": verdict.get("accuracy_evidence", ""),
+        "completeness_evidence": verdict.get("completeness_evidence", ""),
+        "notes": verdict.get("notes", ""),
+        "billed_input_tokens": out.get("billed_input_tokens", 0),
+        "cache_write_tokens": out.get("cache_write_tokens", 0),
+        "cache_read_tokens": out.get("cache_read_tokens", 0),
+        "output_tokens": out.get("output_tokens", 0),
+        "thinking_tokens": out.get("thinking_tokens", 0),
+        "reported_cost_usd": out.get("reported_cost_usd"),
+        "attempts": out.get("attempts"),
+        "latency_seconds": out.get("latency_seconds"),
+    }
+
+
+def migrate_schema(path: Path, fieldnames: list[str]) -> None:
+    """Bring an existing scores file up to the current FIELDNAMES.
+
+    rq2_judge_scores.csv carries 95 rows written before token capture existed.
+    Appending new, wider rows under that stale header would misalign every
+    column DictWriter writes from here on, so rows scored before the change
+    are rewritten with the new token columns blank rather than absent.
+    """
+    if not path.exists():
+        return
+    with open(path) as f:
+        rows = list(csv.DictReader(f))
+    if rows and list(rows[0].keys()) == fieldnames:
+        return
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: row.get(k, "") for k in fieldnames})
+
+
 def load_scored(path: Path) -> set[tuple[str, str, str]]:
     """Keys already graded, so a resumed run does not pay for them twice."""
     if not path.exists():
@@ -159,6 +212,7 @@ def main():
         }
 
     output_path = Path(args.output)
+    migrate_schema(output_path, FIELDNAMES)
     scored = load_scored(output_path)
     pending = [
         r for r in responses
@@ -205,19 +259,7 @@ def main():
             logger.error("  gagal menilai %s: %s", resp["task_id"], e)
             continue
 
-        row = {
-            "task_id": resp["task_id"],
-            "condition": resp["condition"],
-            "model": resp.get("model", ""),
-            "category": resp.get("category", ""),
-            "project": project,
-            "judge_model": args.judge_model,
-            "accuracy_score": verdict["accuracy"],
-            "completeness_score": verdict["completeness"],
-            "accuracy_evidence": verdict.get("accuracy_evidence", ""),
-            "completeness_evidence": verdict.get("completeness_evidence", ""),
-            "notes": verdict.get("notes", ""),
-        }
+        row = build_row(resp, project, args.judge_model, verdict, out)
         _append(output_path, row)
         written += 1
 

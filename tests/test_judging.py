@@ -111,6 +111,87 @@ def test_rejects_a_reply_with_no_json_at_all(judge):
         judge.parse_verdict("I think the answer is pretty good, maybe a 4.")
 
 
+# ── token accounting ────────────────────────────────────────────────────────
+
+def _out(**overrides):
+    out = {
+        "billed_input_tokens": 33750, "cache_write_tokens": 30000,
+        "cache_read_tokens": 3000, "output_tokens": 400,
+        "thinking_tokens": 150, "reported_cost_usd": 0.42,
+        "attempts": 1, "latency_seconds": 12.3,
+    }
+    out.update(overrides)
+    return out
+
+
+def test_build_row_carries_token_usage_from_the_backend_call(judge):
+    resp = {"task_id": "t1", "condition": "full", "model": "claude-haiku-4-5"}
+    verdict = {"accuracy": 4, "completeness": 3}
+
+    row = judge.build_row(resp, "sunflower", "claude-sonnet-5", verdict, _out())
+
+    assert row["billed_input_tokens"] == 33750
+    assert row["cache_write_tokens"] == 30000
+    assert row["cache_read_tokens"] == 3000
+    assert row["output_tokens"] == 400
+    assert row["thinking_tokens"] == 150
+    assert row["reported_cost_usd"] == 0.42
+    assert row["attempts"] == 1
+    assert row["latency_seconds"] == 12.3
+
+
+def test_build_row_is_a_subset_of_fieldnames(judge):
+    resp = {"task_id": "t1", "condition": "full", "model": "claude-haiku-4-5"}
+    verdict = {"accuracy": 4, "completeness": 3}
+
+    row = judge.build_row(resp, "sunflower", "claude-sonnet-5", verdict, _out())
+
+    assert set(row.keys()) == set(judge.FIELDNAMES)
+
+
+def test_migrate_schema_leaves_a_file_already_on_the_current_header_alone(
+    judge, tmp_path
+):
+    path = tmp_path / "scores.csv"
+    path.write_text(",".join(judge.FIELDNAMES) + "\n")
+
+    judge.migrate_schema(path, judge.FIELDNAMES)
+
+    assert path.read_text() == ",".join(judge.FIELDNAMES) + "\n"
+
+
+def test_migrate_schema_backfills_rows_scored_before_token_columns_existed(
+    judge, tmp_path
+):
+    # rq2_judge_scores.csv has 95 rows written before token capture existed.
+    # Widening FIELDNAMES without backfilling them would misalign every column
+    # DictWriter appends afterwards.
+    old_fields = [
+        "task_id", "condition", "model", "category", "project",
+        "judge_model", "accuracy_score", "completeness_score",
+        "accuracy_evidence", "completeness_evidence", "notes",
+    ]
+    path = tmp_path / "scores.csv"
+    with open(path, "w", newline="") as f:
+        writer = __import__("csv").DictWriter(f, fieldnames=old_fields)
+        writer.writeheader()
+        writer.writerow({
+            "task_id": "t1", "condition": "full", "model": "claude-haiku-4-5",
+            "category": "navigation", "project": "sunflower",
+            "judge_model": "claude-sonnet-5", "accuracy_score": 4,
+            "completeness_score": 3, "accuracy_evidence": "Plant.kt",
+            "completeness_evidence": "ok", "notes": "",
+        })
+
+    judge.migrate_schema(path, judge.FIELDNAMES)
+
+    rows = list(__import__("csv").DictReader(open(path)))
+    assert len(rows) == 1
+    assert rows[0]["task_id"] == "t1"
+    assert rows[0]["billed_input_tokens"] == ""
+    assert set(rows[0].keys()) == set(judge.FIELDNAMES)
+
+
 # ── the validation sample ───────────────────────────────────────────────────
 
 def _responses(models=("haiku", "sonnet", "opus"),
