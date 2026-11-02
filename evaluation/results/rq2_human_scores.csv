@@ -1,0 +1,37 @@
+task_id,condition,model,category,project,accuracy_score,completeness_score,evidence,notes
+tivi_nav_01,summary,claude-haiku-4-5,navigation,tivi,5,4,"properti nya benar, tapi ada logika di dalamnya. pemanggilnya mungkin tidak peduli dengan logika di dalamnya karena pembandingnya dari konstan 'LocalWindowSizeClass.current.widthSizeClass'",
+sunflower_und_04,full,claude-haiku-4-5,understanding,sunflower,5,5,,
+architecture-components-samples_nav_04,full,claude-haiku-4-5,navigation,architecture-components-samples,5,5,,
+compose-samples_nav_03,full,claude-haiku-4-5,navigation,compose-samples,5,5,,
+tivi_und_03,full,claude-haiku-4-5,understanding,tivi,4,5,,
+nowinandroid_mod_04,summary,claude-haiku-4-5,modification,nowinandroid,4,4,,"agak sulit mengevaluasi bagian ini, secara keseluruhan mungkin bagian-bagian yang harus di evaluasi benar, tapi saran yang di berikan agak kurang. karena saran kurang agen kemudian mengajukan pertanyaan(permintaan) ke user, ini bagus. lebih baik mengajukan pertanyaan daripada langsung berasumsi."
+compose-samples_nav_04,full,claude-haiku-4-5,navigation,compose-samples,5,5,,
+compose-samples_und_01,summary,claude-haiku-4-5,understanding,compose-samples,5,5,,
+compose-samples_nav_04,summary,claude-haiku-4-5,navigation,compose-samples,5,5,,
+sunflower_mod_03,summary,claude-haiku-4-5,modification,sunflower,5,5,,
+architecture-components-samples_nav_05,full,claude-haiku-4-5,navigation,architecture-components-samples,5,5,,
+tivi_mod_03,summary,claude-haiku-4-5,modification,tivi,5,5,,
+architecture-components-samples_mod_04,full,claude-haiku-4-5,modification,architecture-components-samples,5,3,"plan nya oke, tapi untuk eksekusi masih kurang.",
+architecture-components-samples_und_01,summary,claude-haiku-4-5,understanding,architecture-components-samples,4,4,,
+nowinandroid_und_05,summary,claude-haiku-4-5,understanding,nowinandroid,5,5,,
+sunflower_mod_04,hybrid,claude-haiku-4-5,modification,sunflower,4,5,,"daftar file-nya sudah benar, tapi rencananya tidak memakai RemoteMediator dan bikin bug, yaitu  refresh yang tetap mengembalikan data lama dari cache OkHttp dan app crash saat upgrade karena versi  database dinaikkan tanpa Migration."
+tivi_und_01,hybrid,claude-haiku-4-5,understanding,tivi,4,5,,"Jawaban jelas untuk downstream data flow, tapi missing reverse event flow dan side effects — incomplete untuk full picture bidirectional communication."
+compose-samples_nav_02,hybrid,claude-haiku-4-5,navigation,compose-samples,5,5,,
+architecture-components-samples_und_03,full,claude-haiku-4-5,understanding,architecture-components-samples,4,5,,"Struktur bagus, hierarchy jelas, tapi factory method-nya pseudo-coded — gak tau akurat atau  rekonstruksi, dan missing concrete property definitions plus error extraction logic."
+tivi_und_04,summary,claude-haiku-4-5,understanding,tivi,5,4,,"Konseptual solid, context analysis bagus, tapi signature lengkap gak ada (return type?), language terlalu uncertain (""likely""), dan missing implementation details plus error handling specifics."
+nowinandroid_mod_04,hybrid,claude-haiku-4-5,modification,nowinandroid,3,2,,"Jujur soal limitasi, tapi too passive — harusnya grep/search untuk network layer, check build.gradle,  explore repository patterns. Instead of asking ""bisa kasih file lagi?"", harusnya proaktif cari sendiri."
+architecture-components-samples_nav_03,hybrid,claude-haiku-4-5,navigation,architecture-components-samples,4,4,,
+tivi_mod_01,full,claude-haiku-4-5,modification,tivi,3,5,,Terlalu pasif (efek haiku kah?)
+compose-samples_nav_03,summary,claude-haiku-4-5,navigation,compose-samples,5,5,,
+architecture-components-samples_mod_01,hybrid,claude-haiku-4-5,modification,architecture-components-samples,5,5,,
+sunflower_nav_04,hybrid,claude-haiku-4-5,navigation,sunflower,5,5,,
+architecture-components-samples_mod_02,hybrid,claude-haiku-4-5,modification,architecture-components-samples,5,5,,
+tivi_mod_04,full,claude-haiku-4-5,modification,tivi,3,4,,"Respons tersebut menunjukkan analytical thinking yang baik, tapi gagal mengambil inisiatif untuk explore codebase dan deliver actual implementation plan yang diminta."
+tivi_mod_01,summary,claude-haiku-4-5,modification,tivi,4,2,,"Respons terlalu pasif dan tanya balik tanpa attempt exploration, padahal bisa proactively find related files untuk narrow scope dan kasih answer yang konkret."
+sunflower_und_04,hybrid,claude-haiku-4-5,understanding,sunflower,5,5,,
+architecture-components-samples_und_01,hybrid,claude-haiku-4-5,understanding,architecture-components-samples,3,5,,"alurnya terstruktur dan lebih lengkap soal processResponse, Resource, dan perilaku offline, tapi snippet UI-nya tidak ada di kode (showProgressBar()/showError() tidak pernah ada, dan fragment aslinya memanggil submitList(result?.data) di semua state), RateLimiter keliru disebut dipakai di search, switchMap ditaruh di repository padahal ada di ViewModel, dan jalur load more tidak dibahas."
+compose-samples_und_02,hybrid,claude-haiku-4-5,understanding,compose-samples,4,3,,
+sunflower_nav_02,summary,claude-haiku-4-5,navigation,sunflower,5,5,,
+tivi_und_05,full,claude-haiku-4-5,understanding,tivi,5,5,,
+compose-samples_nav_03,hybrid,claude-haiku-4-5,navigation,compose-samples,5,5,,
+architecture-components-samples_mod_01,full,claude-haiku-4-5,modification,architecture-components-samples,4,3,,

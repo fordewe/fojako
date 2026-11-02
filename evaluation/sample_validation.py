@@ -9,16 +9,20 @@ Per tier matters here. Judge and subject share a model family, so
 self-preference would favour whichever tier matches the judge. Balancing the
 sample across tiers turns that from an argument into a measurement.
 
-The output is a plain subset of the responses file, so ``score_responses.py``
+The output is a plain subset of the responses file, so ``validate_ui.py``
 reads it with no changes:
 
     uv run python evaluation/sample_validation.py \\
         --responses evaluation/results/rq2_responses.json \\
         --output evaluation/results/rq2_validation_sample.json
 
-    uv run python evaluation/score_responses.py \\
-        --input evaluation/results/rq2_validation_sample.json \\
+    uv run python evaluation/validate_ui.py \\
+        --sample evaluation/results/rq2_validation_sample.json \\
         --output evaluation/results/rq2_human_scores.csv
+
+``score_responses.py`` is the older terminal scorer. Its rows carry no
+``category``, so agreement per category cannot be computed from them and the
+web UI is the correct path for this design.
 """
 
 import argparse
