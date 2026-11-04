@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluation"))
 from analyze_kappa import (  # noqa: E402
     agreement,
     by_category,
+    load_judge_files,
     verdict,
     weighted_kappa,
 )
@@ -154,3 +155,35 @@ def test_floor_flags_low_kappa():
     assert verdict(0.60) == "below floor"
     assert verdict(0.61) == "substantial or better"
     assert verdict(None) == "undefined"
+
+
+# ── several judge files ─────────────────────────────────────────────────────
+
+FIELDS = ["task_id", "condition", "model", "category",
+          "accuracy_score", "completeness_score"]
+
+
+def write_scores(path, rows):
+    import csv
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
+def test_judge_files_are_read_as_one_table(tmp_path):
+    first = write_scores(tmp_path / "a.csv", [row("t1", "full", "m", "navigation", 5, 5)])
+    second = write_scores(tmp_path / "b.csv", [row("t2", "full", "m", "navigation", 4, 4)])
+
+    rows = load_judge_files([first, second])
+
+    assert [r["task_id"] for r in rows] == ["t1", "t2"]
+
+
+def test_a_response_judged_in_two_files_is_rejected(tmp_path):
+    first = write_scores(tmp_path / "a.csv", [row("t1", "full", "m", "navigation", 5, 5)])
+    second = write_scores(tmp_path / "b.csv", [row("t1", "full", "m", "navigation", 3, 3)])
+
+    with pytest.raises(ValueError, match="t1"):
+        load_judge_files([first, second])

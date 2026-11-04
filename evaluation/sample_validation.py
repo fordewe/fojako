@@ -23,9 +23,23 @@ reads it with no changes:
 ``score_responses.py`` is the older terminal scorer. Its rows carry no
 ``category``, so agreement per category cannot be computed from them and the
 web UI is the correct path for this design.
+
+Pass ``--judged`` with the judge score files for any new draw, so the sample
+only holds responses that already have a judge score:
+
+    uv run python evaluation/sample_validation.py \\
+        --judged evaluation/results/rq2_judge_scores.csv \\
+        --output evaluation/results/rq2_validation_sample_new.json
+
+The committed ``rq2_validation_sample.json`` was drawn without it, from all
+213 responses with seed 42, and running the script with no ``--judged``
+reproduces it exactly. Eight of its 36 responses fell outside the judged
+subset and were judged afterwards into ``rq2_judge_validation_extra.csv``.
+The default stays unfiltered so that sample can still be redrawn.
 """
 
 import argparse
+import csv
 import json
 import logging
 import random
@@ -36,6 +50,25 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 PER_CELL = 4
+KEY = ("task_id", "condition", "model")
+
+
+def response_key(r: dict) -> tuple:
+    return tuple(r.get(k, "") for k in KEY)
+
+
+def judged_keys(paths: list[Path]) -> set[tuple]:
+    """``(task_id, condition, model)`` of every response in the judge files."""
+    keys: set[tuple] = set()
+    for path in paths:
+        with open(path) as f:
+            keys.update(response_key(r) for r in csv.DictReader(f))
+    return keys
+
+
+def restrict(responses: list[dict], keys: set[tuple]) -> list[dict]:
+    """The responses that have a judge score, in their original order."""
+    return [r for r in responses if response_key(r) in keys]
 
 
 def cells(responses: list[dict]) -> dict[tuple, list[dict]]:
@@ -76,10 +109,26 @@ def main():
     )
     parser.add_argument("--per-cell", type=int, default=PER_CELL)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--judged", nargs="+", default=None,
+        help="judge score files; draw only from responses they score",
+    )
     args = parser.parse_args()
 
     with open(args.responses) as f:
         responses = [r for r in json.load(f) if not r.get("error")]
+
+    if args.judged:
+        judged_paths = [Path(p) for p in args.judged]
+        missing = [str(p) for p in judged_paths if not p.exists()]
+        if missing:
+            raise SystemExit(f"Berkas juri tidak ditemukan: {', '.join(missing)}")
+        before = len(responses)
+        responses = restrict(responses, judged_keys(judged_paths))
+        logger.info(
+            "%d dari %d respons sudah dinilai juri; sampel diambil dari situ",
+            len(responses), before,
+        )
 
     sample, short = draw(responses, args.per_cell, args.seed)
 

@@ -15,14 +15,17 @@ the expected disagreement goes to zero and the ratio has no meaning. That case
 returns ``None`` so a caller cannot mistake a degenerate sample for a bad
 judge.
 
-    uv run python evaluation/analyze_kappa.py \
-        --judge evaluation/results/rq2_judge_scores.csv \
-        --human evaluation/results/rq2_human_scores.csv
+    uv run python evaluation/analyze_kappa.py
 
     uv run python evaluation/analyze_kappa.py \
-        --judge evaluation/results/rq2_judge_scores.csv \
-        --human evaluation/results/rq2_human_scores.csv \
         --rescore evaluation/results/rq2_human_rescore.csv
+
+The judge scores live in two files. ``rq2_judge_scores.csv`` holds the 142
+responses judged for RQ2. ``rq2_judge_validation_extra.csv`` holds the eight
+responses that the validation sample drew outside that set, judged after the
+human pass with the same model, prompt and rubric. ``--judge`` reads both by
+default and refuses a response that appears in more than one file, since
+silently keeping either score would change kappa.
 
 The rescore file is the same schema as the human file, collected in a second
 sitting. ``validate_ui.py`` skips a response it has already scored in the same
@@ -38,6 +41,10 @@ from pathlib import Path
 FLOOR = 0.61
 DIMENSIONS = ("accuracy", "completeness")
 KEY = ("task_id", "condition", "model")
+DEFAULT_JUDGE = (
+    "evaluation/results/rq2_judge_scores.csv",
+    "evaluation/results/rq2_judge_validation_extra.csv",
+)
 
 
 def weighted_kappa(rater_a, rater_b, min_rating=1, max_rating=5):
@@ -117,6 +124,26 @@ def load_scores(path):
         return [r for r in csv.DictReader(f)]
 
 
+def load_judge_files(paths):
+    """Judge rows from several score files, read as one table.
+
+    Raises ``ValueError`` when one response is scored in two files: which
+    score should count is a decision, not something a join can make.
+    """
+    rows = []
+    source = {}
+    for path in paths:
+        for r in load_scores(path):
+            key = tuple(r[k] for k in KEY)
+            if key in source:
+                raise ValueError(
+                    f"{key} is scored in both {source[key]} and {path}"
+                )
+            source[key] = path
+            rows.append(r)
+    return rows
+
+
 def verdict(kappa):
     if kappa is None:
         return "undefined"
@@ -156,7 +183,8 @@ def report_categories(result):
 def main():
     parser = argparse.ArgumentParser(description="Judge-vs-human agreement")
     parser.add_argument(
-        "--judge", default="evaluation/results/rq2_judge_scores.csv"
+        "--judge", nargs="+", default=list(DEFAULT_JUDGE),
+        help="one or more judge score files, read as one table",
     )
     parser.add_argument(
         "--human", default="evaluation/results/rq2_human_scores.csv"
@@ -168,7 +196,14 @@ def main():
     parser.add_argument("--json", default=None, help="write the numbers here")
     args = parser.parse_args()
 
-    judge_rows = load_scores(Path(args.judge))
+    judge_paths = [Path(p) for p in args.judge]
+    missing = [str(p) for p in judge_paths if not p.exists()]
+    if missing:
+        raise SystemExit(f"Berkas juri tidak ditemukan: {', '.join(missing)}")
+    try:
+        judge_rows = load_judge_files(judge_paths)
+    except ValueError as e:
+        raise SystemExit(f"Skor juri ganda: {e}")
     human_path = Path(args.human)
     if not human_path.exists():
         raise SystemExit(
