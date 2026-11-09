@@ -15,6 +15,14 @@ the expected disagreement goes to zero and the ratio has no meaning. That case
 returns ``None`` so a caller cannot mistake a degenerate sample for a bad
 judge.
 
+Gwet's AC2, with the same quadratic weights, is reported beside kappa. Kappa
+drops when scores pile up at one end of the scale even while the raters agree,
+and the validation scores sit mostly at 4 and 5. AC2 was added after the first
+external rater's scores showed that pile-up, before it was computed on any
+data. Kappa stays the primary statistic and the only one held to the floor.
+AC2 counts the whole 1-5 scale as its categories; taking the categories from
+the scores that occur changes the value.
+
     uv run python evaluation/analyze_kappa.py
 
     uv run python evaluation/analyze_kappa.py \
@@ -47,14 +55,33 @@ DEFAULT_JUDGE = (
 )
 
 
+def check_ratings(rater_a, rater_b, min_rating, max_rating):
+    """Raise ``ValueError`` on unequal lengths or a rating off the scale.
+
+    A rating off the scale would otherwise index the wrong category silently.
+    """
+    if len(rater_a) != len(rater_b):
+        raise ValueError("rater_a and rater_b must have the same length")
+    off_scale = [r for r in (*rater_a, *rater_b)
+                 if not min_rating <= r <= max_rating]
+    if off_scale:
+        raise ValueError(
+            f"ratings outside {min_rating}-{max_rating}: {sorted(set(off_scale))}"
+        )
+
+
+def disagreement_weight(i, j, span):
+    """Quadratic disagreement between categories i and j on a span-point scale."""
+    return (i - j) ** 2 / (span - 1) ** 2
+
+
 def weighted_kappa(rater_a, rater_b, min_rating=1, max_rating=5):
     """Quadratic-weighted Cohen's kappa for two ordinal rating lists.
 
     Returns ``None`` when the ratings cannot support a kappa: no pairs, or
     zero expected disagreement.
     """
-    if len(rater_a) != len(rater_b):
-        raise ValueError("rater_a and rater_b must have the same length")
+    check_ratings(rater_a, rater_b, min_rating, max_rating)
     n = len(rater_a)
     if n == 0:
         return None
@@ -71,7 +98,7 @@ def weighted_kappa(rater_a, rater_b, min_rating=1, max_rating=5):
     denominator = 0.0
     for i in range(span):
         for j in range(span):
-            weight = (i - j) ** 2 / (span - 1) ** 2
+            weight = disagreement_weight(i, j, span)
             numerator += weight * observed[i][j]
             denominator += weight * row_sums[i] * col_sums[j] / n
 
@@ -80,8 +107,50 @@ def weighted_kappa(rater_a, rater_b, min_rating=1, max_rating=5):
     return 1.0 - numerator / denominator
 
 
+def gwet_ac2(rater_a, rater_b, min_rating=1, max_rating=5):
+    """Gwet's AC2 with quadratic weights for two ordinal rating lists.
+
+    AC2 = (pa - pe) / (1 - pe). pa is the mean agreement weight over the
+    pairs. pe = T / (q (q - 1)) * sum_k p_k (1 - p_k), where q is the number
+    of points on the scale, T the sum of all q * q agreement weights, and p_k
+    the share of both raters' ratings that fall in category k (Gwet,
+    Handbook of Inter-Rater Reliability, 4th ed., 2014, ch. 3). Matches R
+    irrCAC ``gwet.ac1.raw(weights = "quadratic")`` with ``categ.labels`` set
+    to the full scale.
+
+    Returns ``None`` when there are no pairs.
+    """
+    check_ratings(rater_a, rater_b, min_rating, max_rating)
+    n = len(rater_a)
+    if n == 0:
+        return None
+
+    span = max_rating - min_rating + 1
+
+    def agreement_weight(i, j):
+        return 1.0 - disagreement_weight(i, j, span)
+
+    observed = sum(
+        agreement_weight(a - min_rating, b - min_rating)
+        for a, b in zip(rater_a, rater_b)
+    ) / n
+
+    counts = [0] * span
+    for r in (*rater_a, *rater_b):
+        counts[r - min_rating] += 1
+    shares = [c / (2 * n) for c in counts]
+
+    total_weight = sum(agreement_weight(i, j)
+                       for i in range(span) for j in range(span))
+    chance = (total_weight / (span * (span - 1))
+              * sum(p * (1 - p) for p in shares))
+    if chance == 1:
+        return None
+    return (observed - chance) / (1 - chance)
+
+
 def agreement(rows_a, rows_b):
-    """Kappa per dimension over the rows both raters scored.
+    """Kappa and AC2 per dimension over the rows both raters scored.
 
     Rows are matched on ``(task_id, condition, model)``. A row scored by one
     rater and not the other is dropped rather than imputed. The two directions
@@ -100,7 +169,8 @@ def agreement(rows_a, rows_b):
         column = f"{dimension}_score"
         a = [int(r[column]) for r, _ in pairs]
         b = [int(s[column]) for _, s in pairs]
-        out[dimension] = {"kappa": weighted_kappa(a, b), "n": len(pairs)}
+        out[dimension] = {"kappa": weighted_kappa(a, b),
+                          "ac2": gwet_ac2(a, b), "n": len(pairs)}
     out["n_matched"] = len(pairs)
     out["n_judge_only"] = len(a_index) - len(pairs)
     out["n_human_only"] = human_only
@@ -152,6 +222,10 @@ def verdict(kappa):
     return "substantial or better"
 
 
+def shown(value):
+    return "undef." if value is None else f"{value:.3f}"
+
+
 def report(title, result):
     print(f"\n% ── {title} " + "─" * max(0, 56 - len(title)))
     print(
@@ -162,20 +236,18 @@ def report(title, result):
         print("% PERINGATAN: ada skor manusia tanpa pasangan juri; periksa kunci.")
     for dimension in DIMENSIONS:
         cell = result[dimension]
-        kappa = cell["kappa"]
-        shown = "undef." if kappa is None else f"{kappa:.3f}"
-        print(f"  {dimension:<13} kappa = {shown:<7} n = {cell['n']:<3} "
-              f"{verdict(kappa)}")
+        print(f"  {dimension:<13} kappa = {shown(cell['kappa']):<7} "
+              f"AC2 = {shown(cell['ac2']):<7} n = {cell['n']:<3} "
+              f"{verdict(cell['kappa'])}")
 
 
 def report_categories(result):
-    print("\n% ── Per kategori " + "─" * 41)
+    print("\n% ── Per kategori (kappa / AC2) " + "─" * 28)
     for category, cell in result.items():
         parts = []
         for dimension in DIMENSIONS:
-            kappa = cell[dimension]["kappa"]
-            shown = "undef." if kappa is None else f"{kappa:.3f}"
-            parts.append(f"{dimension}={shown}")
+            parts.append(f"{dimension}={shown(cell[dimension]['kappa'])}"
+                         f"/{shown(cell[dimension]['ac2'])}")
         print(f"  {category:<15} n = {cell['n_matched']:<3} "
               f"{'  '.join(parts)}")
 

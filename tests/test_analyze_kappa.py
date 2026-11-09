@@ -3,7 +3,8 @@
 The paper reports quadratic-weighted kappa as evidence that the LLM judge can
 stand in for a human reader. A weighting bug would change that number without
 changing the data, so the weighting is checked against scikit-learn rather than
-against a second hand-written implementation.
+against a second hand-written implementation. Gwet's AC2, reported beside
+kappa, is checked against values from R irrCAC for the same reason.
 """
 
 import sys
@@ -16,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluation"))
 from analyze_kappa import (  # noqa: E402
     agreement,
     by_category,
+    gwet_ac2,
     load_judge_files,
     verdict,
     weighted_kappa,
@@ -75,6 +77,77 @@ def test_length_mismatch_raises():
 
 
 # ── joining ─────────────────────────────────────────────────────────────────
+
+# Expected AC2 values come from R irrCAC 1.4:
+#   gwet.ac1.raw(data.frame(a, b), weights = "quadratic", categ.labels = 1:5)
+# irrCAC rounds to five decimals, hence the tolerance.
+IRRCAC = {"abs": 1e-5}
+CEILING_A = [5, 5, 5, 5, 5, 5, 5, 5, 4, 4]
+CEILING_B = [5, 5, 5, 5, 5, 5, 5, 4, 5, 4]
+
+
+def test_ac2_matches_irrcac_on_mixed_ratings():
+    rater_a = [5, 4, 3, 2, 1, 5, 3, 4, 2, 1, 5, 4]
+    rater_b = [5, 4, 3, 1, 2, 4, 3, 4, 1, 1, 5, 3]
+    assert gwet_ac2(rater_a, rater_b) == pytest.approx(0.89899, **IRRCAC)
+
+
+def test_ac2_stays_high_where_kappa_collapses_at_the_ceiling():
+    # Nine of ten pairs within one point and most at 5: the case AC2 was
+    # added for. Kappa reads it as fair agreement.
+    assert weighted_kappa(CEILING_A, CEILING_B) == pytest.approx(0.375)
+    assert gwet_ac2(CEILING_A, CEILING_B) == pytest.approx(0.98214, **IRRCAC)
+
+
+def test_ac2_uses_the_whole_scale_not_the_observed_categories():
+    # With categories taken from the data (only 4 and 5), irrCAC gives
+    # 0.70588 for the same ratings. The rubric scale is 1-5.
+    assert gwet_ac2(CEILING_A, CEILING_B) != pytest.approx(0.70588, **IRRCAC)
+
+
+def test_ac2_perfect_agreement_is_one():
+    assert gwet_ac2([1, 2, 3, 4, 5], [1, 2, 3, 4, 5]) == pytest.approx(1.0)
+
+
+def test_ac2_is_defined_when_both_raters_use_one_value():
+    # Kappa is undefined here; AC2 is not.
+    assert gwet_ac2([3] * 8, [3] * 8) == pytest.approx(1.0, **IRRCAC)
+
+
+def test_ac2_empty_returns_none():
+    assert gwet_ac2([], []) is None
+
+
+def test_ac2_length_mismatch_raises():
+    with pytest.raises(ValueError):
+        gwet_ac2([1, 2], [1])
+
+
+@pytest.mark.parametrize("statistic", [weighted_kappa, gwet_ac2])
+def test_rating_off_the_scale_raises(statistic):
+    # A 0 would otherwise index the last category through Python's negative
+    # indexing and return a number.
+    with pytest.raises(ValueError, match="outside 1-5"):
+        statistic([0, 5, 4], [5, 5, 4])
+
+
+def test_agreement_reports_ac2_beside_kappa():
+    judge = [
+        row("t1", "full", "m", "navigation", 5, 5),
+        row("t2", "full", "m", "navigation", 4, 3),
+    ]
+    human = [
+        row("t1", "full", "m", "navigation", 5, 4),
+        row("t2", "full", "m", "navigation", 4, 3),
+    ]
+
+    result = agreement(judge, human)
+
+    assert result["accuracy"]["ac2"] == pytest.approx(1.0)
+    assert result["completeness"]["ac2"] == pytest.approx(
+        gwet_ac2([5, 3], [4, 3])
+    )
+
 
 def test_join_drops_rows_missing_from_the_other_rater():
     judge = [
