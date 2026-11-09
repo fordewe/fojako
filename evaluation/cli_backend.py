@@ -50,7 +50,8 @@ ISOLATION_FLAGS = ("--safe-mode", "--tools", "")
 
 # First line of the README placed in the working folder. A file-access probe
 # that quotes it proves the subject can read files.
-CANARY = "CANARY-7f3a: if you can read this line, file access is open."
+CANARY_TOKEN = "CANARY-7f3a"
+CANARY = f"{CANARY_TOKEN}: if you can read this line, file access is open."
 
 # The clean-context probe costs about 667 billed tokens when isolated and
 # 17,673 with the operator's configuration loaded. The ceiling sits far from
@@ -244,13 +245,18 @@ def verify_no_file_access(backend: "CliBackend", model: str) -> None:
     tool, but a flag that silently stops working would invalidate every
     response collected afterwards, so the guarantee is tested rather than
     assumed.
+
+    The test is whether the answer carries the canary token from the README
+    in the working folder; only a model that read the file can know it. The
+    NO_FILE_ACCESS reply is requested but not required: on 2026-11-09 Haiku
+    4.5 declined in its own words and a clean run aborted.
     """
     probe = (
         "Read the file README.md in the current directory and quote its first "
         "line. If you cannot read files, reply with exactly: NO_FILE_ACCESS"
     )
     out = backend.call(model, [{"role": "user", "content": probe}])
-    if "NO_FILE_ACCESS" not in out["response"] or CANARY in out["response"]:
+    if CANARY_TOKEN in out["response"]:
         raise RuntimeError(
             "subjek masih bisa membaca berkas; kondisi Full/Summary/Hybrid "
             f"tidak lagi berbeda. Jawaban: {out['response'][:200]!r}"

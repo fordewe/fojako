@@ -222,14 +222,31 @@ def test_file_access_probe_aborts_the_run_when_the_model_reads_a_file(
 ):
     # If the subject can open the sources it answers every condition from the
     # sources, and Full, Summary and Hybrid stop being different conditions.
-    # Failing here is cheaper than discovering it after 639 responses.
+    # Failing here is cheaper than discovering it after 639 responses. The
+    # proof of reading is the canary line from the README in its folder.
     monkeypatch.setattr(
         subprocess, "run",
-        lambda *a, **k: _completed(_payload(result="The first line is '# Sunflower'")),
+        lambda *a, **k: _completed(_payload(result=f"The first line is: {CANARY}")),
     )
 
     with pytest.raises(RuntimeError, match="masih bisa membaca berkas"):
         verify_no_file_access(backend, "claude-haiku-4-5")
+
+
+def test_file_access_probe_passes_when_the_model_declines_in_its_own_words(
+    backend, monkeypatch
+):
+    # Haiku 4.5, observed 2026-11-09 on the Full run: it could not read the
+    # file but did not echo the NO_FILE_ACCESS token, and the run aborted.
+    monkeypatch.setattr(
+        subprocess, "run",
+        lambda *a, **k: _completed(_payload(result=(
+            "I don't have the ability to directly read files from the "
+            "filesystem. I can only work with code provided in the conversation."
+        ))),
+    )
+
+    verify_no_file_access(backend, "claude-haiku-4-5")  # must not raise
 
 
 # ── isolation from the operator's Claude Code configuration ────────────────
