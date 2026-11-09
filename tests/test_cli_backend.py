@@ -2,8 +2,9 @@
 
 Every test here mocks the subprocess. The point is the contract between the
 CLI's JSON and the result dict the rest of the harness consumes, plus the
-guarantees the paper relies on: no filesystem access for the subject, and no
-claim of a temperature that was never set.
+guarantees the paper relies on: no filesystem access for the subject, no
+operator configuration in its context, and no claim of a temperature that was
+never set.
 """
 
 import json
@@ -16,8 +17,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluation"))
 
 from cli_backend import (  # noqa: E402
+    CANARY,
+    ISOLATION,
     CliBackend,
+    FailureStreak,
+    checked_backend,
     flatten_messages,
+    verify_clean_context,
     verify_no_file_access,
 )
 
@@ -49,10 +55,14 @@ def _completed(payload, returncode=0, stdout=None):
 
 
 @pytest.fixture
-def backend(monkeypatch):
+def no_cli_wait(monkeypatch):
     monkeypatch.setattr("cli_backend.shutil.which", lambda _: "/usr/bin/claude")
     monkeypatch.setattr("cli_backend.time.sleep", lambda _: None)
-    return CliBackend(system_prompt="SYS")
+
+
+@pytest.fixture
+def backend(no_cli_wait, tmp_path):
+    return CliBackend(system_prompt="SYS", workdir=tmp_path)
 
 
 # ── flatten_messages ────────────────────────────────────────────────────────
@@ -220,3 +230,179 @@ def test_file_access_probe_aborts_the_run_when_the_model_reads_a_file(
 
     with pytest.raises(RuntimeError, match="masih bisa membaca berkas"):
         verify_no_file_access(backend, "claude-haiku-4-5")
+
+
+# ── isolation from the operator's Claude Code configuration ────────────────
+# The first RQ2 run (2026-09-22) loaded the operator's CLAUDE.md files, rules
+# and plugin hooks into every subject and judge call. These tests pin the
+# flags, the working folder and the probe that keep that from happening again.
+
+def _capture(monkeypatch, payload=None):
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        seen["cwd"] = kwargs.get("cwd")
+        return _completed(payload or _payload())
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    return seen
+
+
+def test_disables_every_customization_and_every_tool(backend, monkeypatch):
+    seen = _capture(monkeypatch)
+
+    backend.call("claude-haiku-4-5", [{"role": "user", "content": "q"}])
+
+    argv = seen["argv"]
+    # --safe-mode drops CLAUDE.md, skills, plugins, hooks and MCP servers but
+    # keeps the subscription login, which --bare does not.
+    assert "--safe-mode" in argv
+    # An empty tool list, not a denylist: a tool added in a later CLI release
+    # would slip past a list of names.
+    assert argv[argv.index("--tools") + 1] == ""
+
+
+def test_runs_in_its_own_folder_with_a_canary_readme(backend, monkeypatch):
+    seen = _capture(monkeypatch)
+
+    backend.call("claude-haiku-4-5", [{"role": "user", "content": "q"}])
+
+    assert seen["cwd"] == backend.workdir
+    assert (backend.workdir / "README.md").read_text().startswith(CANARY)
+
+
+def test_default_folder_is_a_fresh_temporary_one_outside_the_repository(no_cli_wait):
+    # The CLI writes its working directory into the context, so the folder
+    # name must not mention the project or the study.
+    repo = Path(__file__).resolve().parents[1]
+
+    workdir = CliBackend(system_prompt="SYS").workdir
+
+    assert workdir.name.startswith("run-")
+    assert repo not in workdir.resolve().parents
+    assert [p.name for p in workdir.iterdir()] == ["README.md"]
+
+
+def test_result_records_the_isolation(backend, monkeypatch):
+    _capture(monkeypatch)
+
+    out = backend.call("claude-haiku-4-5", [{"role": "user", "content": "q"}])
+
+    assert out["isolation"] == ISOLATION
+
+
+def test_clean_context_probe_passes_on_none_with_a_small_prompt(backend, monkeypatch):
+    # Measured 2026-11-09: 667 billed input tokens for this probe when isolated.
+    _capture(monkeypatch, _payload(result="NONE", fresh=10, write=650, read=0))
+
+    verify_clean_context(backend, "claude-haiku-4-5")  # must not raise
+
+
+def test_clean_context_probe_aborts_when_the_model_names_a_memory_file(
+    backend, monkeypatch
+):
+    _capture(monkeypatch, _payload(
+        result="1. /Users/x/.claude/CLAUDE.md\n2. rules/coding-style.md",
+        fresh=10, write=650, read=0,
+    ))
+
+    with pytest.raises(RuntimeError, match="konteks subjek tidak bersih"):
+        verify_clean_context(backend, "claude-haiku-4-5")
+
+
+def test_clean_context_probe_aborts_on_overhead_even_if_the_model_says_none(
+    backend, monkeypatch
+):
+    # The model's own account can be wrong; the bill cannot. 17,673 tokens is
+    # what the same probe cost with the configuration loaded.
+    _capture(monkeypatch, _payload(result="NONE", fresh=10, write=17_663, read=0))
+
+    with pytest.raises(RuntimeError, match="token"):
+        verify_clean_context(backend, "claude-haiku-4-5")
+
+
+def _probe_aware_run(memory_listed: bool):
+    def fake_run(argv, **kwargs):
+        if "README.md" in kwargs["input"]:
+            return _completed(_payload(result="NO_FILE_ACCESS", write=600, read=0))
+        answer = "/Users/x/.claude/CLAUDE.md" if memory_listed else "NONE"
+        return _completed(_payload(result=answer, write=600, read=0))
+    return fake_run
+
+
+def test_checked_backend_returns_a_backend_that_passed_both_probes(
+    no_cli_wait, monkeypatch
+):
+    monkeypatch.setattr(subprocess, "run", _probe_aware_run(memory_listed=False))
+
+    assert isinstance(checked_backend("SYS", "claude-haiku-4-5"), CliBackend)
+
+
+def test_checked_backend_refuses_a_context_with_operator_files(
+    no_cli_wait, monkeypatch
+):
+    monkeypatch.setattr(subprocess, "run", _probe_aware_run(memory_listed=True))
+
+    with pytest.raises(RuntimeError, match="tidak bersih"):
+        checked_backend("SYS", "claude-haiku-4-5")
+
+
+# ── stopping when the subscription runs out ────────────────────────────────
+
+def test_failure_streak_stops_after_consecutive_failures():
+    streak = FailureStreak(limit=3)
+
+    assert [streak.record(ok=False) for _ in range(3)] == [False, False, True]
+
+
+def test_failure_streak_resets_on_a_success():
+    streak = FailureStreak(limit=3)
+
+    streak.record(ok=False)
+    streak.record(ok=False)
+    streak.record(ok=True)
+
+    assert streak.record(ok=False) is False
+
+
+def test_child_process_drops_session_variables_and_api_keys(backend, monkeypatch):
+    # Launched from inside a Claude Code session, the child would inherit that
+    # session's variables (CLAUDE_EFFORT sets the reasoning effort), and an API
+    # key would bill the API instead of the subscription.
+    for name, value in (("CLAUDECODE", "1"), ("CLAUDE_EFFORT", "xhigh"),
+                        ("CLAUDE_CODE_CHILD_SESSION", "1"),
+                        ("ANTHROPIC_API_KEY", "sk-test"),
+                        ("CLAUDE_CONFIG_DIR", "/cfg")):
+        monkeypatch.setenv(name, value)
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen["env"] = kwargs.get("env")
+        return _completed(_payload())
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    backend.call("claude-haiku-4-5", [{"role": "user", "content": "q"}])
+
+    env = seen["env"]
+    for dropped in ("CLAUDECODE", "CLAUDE_EFFORT", "CLAUDE_CODE_CHILD_SESSION",
+                    "ANTHROPIC_API_KEY"):
+        assert dropped not in env
+    # Kept: where the login lives, and the ordinary environment.
+    assert env["CLAUDE_CONFIG_DIR"] == "/cfg"
+    assert "PATH" in env
+
+
+@pytest.mark.parametrize("answer", [
+    # Sonnet 5 under the judge prompt, observed 2026-11-09. Both describe the
+    # CLI's own fixed sections, not the operator's files, and must not stop
+    # a clean run.
+    "# userEmail\n# Environment\n# You are powered by the model named Sonnet 5",
+    '```json\n{"error": "Invalid grading request: no source code module"}\n```',
+])
+def test_clean_context_probe_ignores_the_cli_built_in_sections(
+    backend, monkeypatch, answer
+):
+    _capture(monkeypatch, _payload(result=answer, fresh=10, write=810, read=0))
+
+    verify_clean_context(backend, "claude-sonnet-5")  # must not raise

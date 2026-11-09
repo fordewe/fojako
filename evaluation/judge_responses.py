@@ -35,7 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from cli_backend import CliBackend  # noqa: E402
+from cli_backend import FailureStreak, checked_backend  # noqa: E402
 from task_runner import build_context  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -228,10 +228,16 @@ def main():
     if not pending:
         return
 
-    backend = None if args.dry_run else CliBackend(JUDGE_SYSTEM_PROMPT)
+    # The judge must see the module source and nothing of the operator's
+    # Claude Code setup: the first run's judge cited that setup when scoring.
+    backend = (
+        None if args.dry_run
+        else checked_backend(JUDGE_SYSTEM_PROMPT, args.judge_model)
+    )
     contexts: dict[str, dict] = {}
     prompt_tokens: list[int] = []
     written = 0
+    streak = FailureStreak()
 
     for i, resp in enumerate(pending, 1):
         project = resp["project"]
@@ -257,8 +263,15 @@ def main():
             # Recorded as a gap rather than a score. A failed judgement that
             # silently became a 3 would be indistinguishable from a real one.
             logger.error("  gagal menilai %s: %s", resp["task_id"], e)
+            if streak.record(ok=False):
+                logger.error(
+                    "%d kegagalan berturut-turut; penilaian dihentikan. "
+                    "Jalankan perintah yang sama setelah kuota pulih.", streak.count,
+                )
+                break
             continue
 
+        streak.record(ok=True)
         row = build_row(resp, project, args.judge_model, verdict, out)
         _append(output_path, row)
         written += 1

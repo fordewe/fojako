@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import anthropic
 
-from cli_backend import CliBackend, verify_no_file_access
+from cli_backend import CliBackend, FailureStreak, checked_backend
 
 from kotlin_mcp.summarizer import _collect_files, _format_summary
 from kotlin_mcp.parsers.java import JavaParser
@@ -384,6 +384,33 @@ def _call_api(
     raise RuntimeError(f"gagal setelah {MAX_RETRIES} percobaan: {last_error}")
 
 
+def load_task_ids(path: Path) -> set[str]:
+    """Task ids to run, from a JSON list of ids or of rows that carry one.
+
+    Accepting rows lets a run be limited to the judged tasks by passing
+    ``rq2_judge_subset.json`` as it is.
+    """
+    with open(path) as f:
+        data = json.load(f)
+    ids = {item if isinstance(item, str) else item["task_id"] for item in data}
+    if not ids:
+        raise ValueError(f"daftar task id kosong: {path}")
+    return ids
+
+
+def completed_keys(rows: list[dict]) -> set[tuple[str, str, str]]:
+    """Keys a resumed run may skip: rows that hold a response, not an error.
+
+    A run cut off by the subscription limit records its last calls as errors.
+    Counting those as done would leave them unanswered for good.
+    """
+    return {
+        (r["task_id"], r["condition"], r.get("model", ""))
+        for r in rows
+        if "error" not in r
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="RQ2 task-based evaluation")
     parser.add_argument(
@@ -423,6 +450,14 @@ def main():
         help="Run only for a specific project name (optional)",
     )
     parser.add_argument(
+        "--task-ids",
+        type=str,
+        help=(
+            "JSON file of task ids, or of rows with a task_id field (e.g. "
+            "rq2_judge_subset.json); run only those tasks"
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Re-run tasks already present in the output file (default: skip them)",
@@ -438,24 +473,30 @@ def main():
         default="api",
         help=(
             "api: Messages API, needs ANTHROPIC_API_KEY, sets temperature. "
-            "cli: claude -p on a subscription, no temperature control and "
-            "the CLI's own scaffolding lands in the billed token counts"
+            "cli: claude -p on a subscription, isolated from the operator's "
+            "Claude Code configuration, no temperature control"
         ),
     )
     args = parser.parse_args()
 
+    wanted = load_task_ids(Path(args.task_ids)) if args.task_ids else None
+
     if args.dry_run:
         client = None
     elif args.backend == "cli":
-        client = CliBackend(SYSTEM_PROMPT)
         # The whole design rests on the subject seeing only the context we
-        # built. Check it before spending a run rather than after.
-        verify_no_file_access(client, args.model)
+        # built: no files, and none of the operator's Claude Code setup.
+        # Check both before spending a run rather than after.
+        client = checked_backend(SYSTEM_PROMPT, args.model)
     else:
         client = anthropic.Anthropic()
 
     with open(args.tasks) as f:
         tasks_data = json.load(f)
+    if wanted is not None:
+        unknown = wanted - {t["id"] for t in tasks_data["tasks"]}
+        if unknown:
+            raise SystemExit(f"task id tidak ada di {args.tasks}: {sorted(unknown)[:5]}")
 
     with open(args.datasets) as f:
         datasets = json.load(f)
@@ -476,7 +517,8 @@ def main():
         return (row["task_id"], row["condition"], row.get("model", ""))
 
     by_key = {key(r): r for r in existing}
-    already = set(by_key)
+    already = completed_keys(existing)
+    streak = FailureStreak()
 
     contexts: dict[str, dict] = {}  # built once per project, reused by every task
     results = []
@@ -507,6 +549,8 @@ def main():
             continue
 
         task_id = task["id"]
+        if wanted is not None and task_id not in wanted:
+            continue
         if (task_id, args.condition, args.model) in already and not args.overwrite:
             skipped += 1
             continue
@@ -567,10 +611,20 @@ def main():
                     ctx["module_path"], module_files,
                 )
             results.append({**base, **result})
+            ok = True
         except Exception as e:
             logger.error("Error on task %s: %s", task_id, e)
             results.append({**base, "error": f"{type(e).__name__}: {e}"})
+            ok = False
         flush()
+        if streak.record(ok):
+            # Most likely the subscription limit. The failed rows are not
+            # counted as done, so the same command resumes after the reset.
+            logger.error(
+                "%d kegagalan berturut-turut; run dihentikan. Jalankan perintah "
+                "yang sama setelah kuota pulih untuk melanjutkan.", streak.count,
+            )
+            break
 
     if args.dry_run:
         for row in results:
