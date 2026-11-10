@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penilaian jawaban</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --panel: #ffffff; --ink: #1c1a17; --muted: #6b6560;
+    --line: #e2ddd5; --accent: #7a5c2e; --ok: #2f6b45; --warn: #9a3b2b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15140f; --panel: #1e1c17; --ink: #ece7de; --muted: #9a938a;
+      --line: #322e27; --accent: #c9a227; --ok: #7fc39a; --warn: #e08a76;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 ui-serif, Georgia, "Times New Roman", serif;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5; background: var(--panel);
+    border-bottom: 1px solid var(--line); padding: 10px 20px;
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  }
+  header b { font-size: 15px; }
+  header span { color: var(--muted); font-size: 13px; }
+  header .tools { margin-left: auto; display: flex; gap: 8px; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section { padding: 20px; min-width: 0; }
+  section + section { border-left: 1px solid var(--line); }
+  @media (max-width: 900px) { section + section { border-left: 0; border-top: 1px solid var(--line); } }
+  h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
+       color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .q { font-size: 17px; margin-bottom: 20px; }
+  .answer, pre.src {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    padding: 14px; white-space: pre-wrap; word-wrap: break-word;
+    font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  pre.src { max-height: 62vh; overflow: auto; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 18px 0 0;
+             padding: 12px 14px; background: var(--panel); }
+  legend { font-size: 13px; font-weight: 600; padding: 0 6px; }
+  legend em { color: var(--muted); font-weight: 400; font-style: normal; }
+  label.opt { display: block; padding: 3px 0; cursor: pointer; font-size: 14px; }
+  label.opt input { margin-right: 8px; }
+  textarea, input[type=text] {
+    width: 100%; background: var(--bg); color: var(--ink); margin-top: 6px;
+    border: 1px solid var(--line); border-radius: 5px; padding: 8px;
+    font: 13px/1.5 ui-monospace, Menlo, monospace; resize: vertical;
+  }
+  .bar { margin-top: 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: 600 14px/1 ui-serif, Georgia, serif; padding: 10px 18px;
+    border: 1px solid var(--accent); border-radius: 5px; cursor: pointer;
+    background: var(--accent); color: var(--bg);
+  }
+  button.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  header button { padding: 7px 12px; font-size: 13px; }
+  .note { color: var(--muted); font-size: 13px; }
+  .warn { color: var(--warn); font-size: 13px; }
+  #filter { max-width: 260px; margin-bottom: 8px; }
+  #start, #finished { max-width: 560px; margin: 60px auto; padding: 0 20px; }
+  #start input { max-width: 320px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="start">
+  <h2>Penilaian jawaban</h2>
+  <p>Tulis namamu. Nama yang sama dipakai untuk melanjutkan nanti, dan menjadi nama
+     berkas hasil (<code>hasil_&lt;nama&gt;.csv</code>).</p>
+  <form id="startForm">
+    <input type="text" id="name" placeholder="nama" autocomplete="off">
+    <div class="bar"><button type="submit">Mulai</button></div>
+  </form>
+  <p class="warn" id="startStatus"></p>
+</div>
+
+<div id="app" hidden>
+<header>
+  <b>Penilaian jawaban</b>
+  <span id="who"></span>
+  <span id="progress"></span>
+  <span id="task"></span>
+  <span class="note">akurasi 1-5 lalu kelengkapan 1-5</span>
+  <span class="tools">
+    <button type="button" class="ghost" id="download">Unduh CSV</button>
+    <button type="button" class="ghost" id="importBtn">Impor CSV</button>
+    <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+  </span>
+</header>
+<p class="warn" id="storageWarn" hidden style="padding: 0 20px">Browser ini tidak bisa menyimpan
+  skor. Tekan "Unduh CSV" setiap beberapa jawaban supaya tidak hilang.</p>
+<main id="work">
+  <section>
+    <h2>Pertanyaan</h2>
+    <div class="q" id="question"></div>
+    <h2>Jawaban yang dinilai</h2>
+    <div class="answer" id="answer"></div>
+    <form id="form">
+      <div id="rubric"></div>
+      <fieldset>
+        <legend>Bukti <em>wajib: berkas dan deklarasi yang kamu periksa</em></legend>
+        <input type="text" id="evidence" placeholder="mis. PlantListViewModel.kt, fun setGrowZoneNumber">
+      </fieldset>
+      <fieldset>
+        <legend>Catatan <em>opsional</em></legend>
+        <textarea id="notes" rows="2"></textarea>
+      </fieldset>
+      <div class="bar">
+        <button type="submit" id="save">Simpan dan lanjut</button>
+        <button type="button" class="ghost" id="skip">Lewati</button>
+        <span class="note" id="status"></span>
+      </div>
+    </form>
+  </section>
+  <section>
+    <h2>Sumber modul <span id="proj" class="note"></span></h2>
+    <input type="text" id="filter" placeholder="saring baris...">
+    <pre class="src" id="source"></pre>
+  </section>
+</main>
+<div id="finished" hidden>
+  <h2>Selesai</h2>
+  <p>Semua jawaban sudah dinilai. Unduh berkas hasil, lalu kirim ke penulis.</p>
+  <div class="bar"><button type="button" id="downloadDone">Unduh hasil</button></div>
+</div>
+</div>
+
+<script type="application/json" id="data">/*DATA*/</script>
+
+<script id="logic">
+// Pure functions, kept free of the page so they can be tested on their own.
+const HEADER = ["task_id", "condition", "model", "category", "project",
+                "accuracy_score", "completeness_score", "evidence", "notes"];
+
+function normalizeName(s) {
+  return String(s).trim().toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+// Hashes a normalized name, which is ASCII only, so char codes are its bytes.
+function fnv1a(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i) & 0xff;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Each rater sees their own order, fixed by their name so a reload keeps it.
+function shuffled(ids, name) {
+  const rnd = mulberry32(fnv1a(name));
+  const out = ids.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function csvField(value) {
+  const s = value === undefined || value === null ? "" : String(value);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function toCsv(rows) {
+  const lines = [HEADER.join(",")];
+  for (const row of rows) lines.push(HEADER.map(h => csvField(row[h])).join(","));
+  return lines.join("\r\n") + "\r\n";
+}
+
+function parseCsv(text) {
+  const records = [];
+  let field = "", record = [], quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") { record.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      record.push(field); records.push(record); record = []; field = "";
+    } else field += c;
+  }
+  if (field !== "" || record.length) { record.push(field); records.push(record); }
+  const nonEmpty = records.filter(r => r.length > 1 || r[0] !== "");
+  if (!nonEmpty.length) return [];
+  const header = nonEmpty[0];
+  return nonEmpty.slice(1).map(r => Object.fromEntries(header.map((h, k) => [h, r[k] ?? ""])));
+}
+</script>
+
+<script id="app-script">
+const DATA = JSON.parse(document.getElementById("data").textContent);
+const byId = Object.fromEntries(DATA.items.map(item => [item.task_id, item]));
+const $ = id => document.getElementById(id);
+
+let name = "", storageKey = "", order = [], scores = {}, cursor = 0, current = null;
+
+function storageAvailable() {
+  try {
+    localStorage.setItem("__probe__", "1");
+    localStorage.removeItem("__probe__");
+    return true;
+  } catch (e) { return false; }
+}
+const STORAGE_OK = storageAvailable();
+
+function persist() {
+  if (!STORAGE_OK) return;
+  try { localStorage.setItem(storageKey, JSON.stringify(scores)); } catch (e) { /* warned at start */ }
+}
+
+function restore() {
+  if (!STORAGE_OK) return {};
+  try { return JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch (e) { return {}; }
+}
+
+function renderRubric() {
+  const box = $("rubric");
+  for (const [title, question, options] of DATA.rubric) {
+    const key = title.toLowerCase();
+    const fs = document.createElement("fieldset");
+    const legend = document.createElement("legend");
+    legend.textContent = title + " ";
+    const em = document.createElement("em");
+    em.textContent = question;
+    legend.appendChild(em);
+    fs.appendChild(legend);
+    for (const [value, text] of options) {
+      const label = document.createElement("label");
+      label.className = "opt";
+      const input = document.createElement("input");
+      input.type = "radio"; input.name = key; input.value = String(value);
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(value + " — " + text));
+      fs.appendChild(label);
+    }
+    box.appendChild(fs);
+  }
+}
+
+function pending() { return order.filter(id => !scores[id]); }
+
+function render() {
+  const left = pending();
+  $("progress").textContent = (order.length - left.length) + " / " + order.length + " dinilai";
+  if (!left.length) {
+    $("work").hidden = true;
+    $("finished").hidden = false;
+    return;
+  }
+  $("work").hidden = false;
+  $("finished").hidden = true;
+  current = byId[left[cursor % left.length]];
+  $("task").textContent = current.category;
+  $("question").textContent = current.question;
+  $("answer").textContent = current.response || "(kosong)";
+  $("proj").textContent = current.project;
+  $("source").textContent = DATA.sources[current.project] || "";
+  $("filter").value = "";
+  $("evidence").value = "";
+  $("notes").value = "";
+  document.querySelectorAll("input[type=radio]").forEach(r => { r.checked = false; });
+  $("status").textContent = "";
+  window.scrollTo(0, 0);
+}
+
+function rows() {
+  return order.slice().sort().filter(id => scores[id]).map(id => ({
+    // CSV columns kept empty so returned files join back through the key.
+    task_id: id, "condition": "", "model": "",
+    category: byId[id].category, project: byId[id].project,
+    accuracy_score: scores[id].accuracy, completeness_score: scores[id].completeness,
+    evidence: scores[id].evidence, notes: scores[id].notes,
+  }));
+}
+
+function download() {
+  const blob = new Blob([toCsv(rows())], {type: "text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "hasil_" + name + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function importCsv(text) {
+  let added = 0;
+  for (const row of parseCsv(text)) {
+    const acc = Number(row.accuracy_score), comp = Number(row.completeness_score);
+    if (!byId[row.task_id] || !(acc >= 1 && acc <= 5) || !(comp >= 1 && comp <= 5)) continue;
+    scores[row.task_id] = {accuracy: acc, completeness: comp,
+                           evidence: row.evidence || "", notes: row.notes || ""};
+    added++;
+  }
+  persist();
+  render();
+  $("status").textContent = added + " skor diimpor.";
+}
+
+function start(rawName) {
+  name = normalizeName(rawName);
+  if (!name) { $("startStatus").textContent = "Nama tidak boleh kosong."; return; }
+  storageKey = "penilaian:" + DATA.package + ":" + name;
+  order = shuffled(DATA.items.map(item => item.task_id), name);
+  scores = restore();
+  $("who").textContent = name;
+  $("start").hidden = true;
+  $("app").hidden = false;
+  $("storageWarn").hidden = STORAGE_OK;
+  render();
+}
+
+$("startForm").addEventListener("submit", e => { e.preventDefault(); start($("name").value); });
+
+$("form").addEventListener("submit", e => {
+  e.preventDefault();
+  const acc = document.querySelector("input[name=accuracy]:checked");
+  const comp = document.querySelector("input[name=completeness]:checked");
+  if (!acc || !comp) { $("status").textContent = "Isi kedua skor dulu."; return; }
+  if (!$("evidence").value.trim()) {
+    $("status").textContent = "Isi bukti dulu: berkas dan deklarasi yang kamu periksa.";
+    return;
+  }
+  scores[current.task_id] = {
+    accuracy: Number(acc.value), completeness: Number(comp.value),
+    evidence: $("evidence").value.trim(), notes: $("notes").value.trim(),
+  };
+  persist();
+  cursor = 0;
+  render();
+});
+
+$("skip").addEventListener("click", () => { cursor++; render(); });
+$("download").addEventListener("click", download);
+$("downloadDone").addEventListener("click", download);
+$("importBtn").addEventListener("click", () => $("importFile").click());
+$("importFile").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => importCsv(String(reader.result));
+  reader.readAsText(file, "utf-8");
+  e.target.value = "";
+});
+
+$("filter").addEventListener("input", e => {
+  const q = e.target.value.toLowerCase();
+  const full = DATA.sources[current.project] || "";
+  $("source").textContent = q
+    ? full.split("\n").filter(l => l.toLowerCase().includes(q)).join("\n")
+    : full;
+});
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+  if (e.key >= "1" && e.key <= "5") {
+    const acc = document.querySelector("input[name=accuracy]:checked");
+    const field = acc ? "completeness" : "accuracy";
+    const box = document.querySelector("input[name=" + field + "][value='" + e.key + "']");
+    if (box) box.checked = true;
+  }
+});
+
+renderRubric();
+const fromUrl = new URLSearchParams(location.search).get("nama");
+if (fromUrl) start(fromUrl);
+</script>
+</body>
+</html>

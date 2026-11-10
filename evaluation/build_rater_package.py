@@ -44,17 +44,20 @@ ID_SEED = 20261105  # fixes which opaque id each response gets
 SHIPPED_FIELDS = ("category", "project", "question", "response")
 
 
-def opaque_items(sample: list[dict], seed: int = ID_SEED) -> tuple[list[dict], list[dict]]:
+def opaque_items(sample: list[dict], seed: int = ID_SEED,
+                 prefix: str = "X") -> tuple[list[dict], list[dict]]:
     """Shipped items with no condition or model, and the key that maps back.
 
     Ids are assigned after a shuffle. The sample file is grouped by condition,
     so ids in file order would tell a rater which answers share a condition.
+    A second package takes another prefix so its ids cannot be confused with
+    the first package's.
     """
     order = list(sample)
     random.Random(seed).shuffle(order)
     shipped, key = [], []
     for n, r in enumerate(order, 1):
-        item_id = f"X{n:02d}"
+        item_id = f"{prefix}{n:02d}"
         shipped.append({"task_id": item_id, "condition": "", "model": "",
                         **{f: r[f] for f in SHIPPED_FIELDS}})
         key.append({"id": item_id, "task_id": r["task_id"],
