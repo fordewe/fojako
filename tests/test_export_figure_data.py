@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluation"))
 from export_figure_data import (  # noqa: E402
     AGGREGATE_FIELDS,
     aggregate_rows,
+    figure_aggregates,
     per_task_rows,
     total_rows,
     write_csv,
@@ -163,3 +164,20 @@ def test_csv_lines_end_in_lf(tmp_path):
 
     assert out.read_bytes() == b"a,b\n1,2\n"
     assert list(csv.DictReader(open(out))) == [{"a": "1", "b": "2"}]
+
+
+def test_figure_aggregates_can_leave_out_the_human_rows():
+    # The clean rerun's human sample is still being scored; until then the
+    # figure shows the judge alone rather than first-run human means.
+    judge = every_cell()
+
+    rows = figure_aggregates(judge, human=None)
+
+    assert {r["rater"] for r in rows} == {"judge"}
+    assert len(rows) == 18
+
+
+def test_figure_aggregates_append_human_rows_when_given():
+    rows = figure_aggregates(every_cell(), human=every_cell())
+
+    assert [r["rater"] for r in rows].count("human") == 18

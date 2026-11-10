@@ -82,6 +82,19 @@ def aggregate_rows(rater: str, rows: list[dict], with_sd: bool) -> list[dict]:
     return out
 
 
+def figure_aggregates(judge: list[dict], human: list[dict] | None) -> list[dict]:
+    """Judge rows, then human rows unless ``human`` is None.
+
+    None leaves the human markers out of the figure. The clean rerun's human
+    sample is scored after the judge, and first-run human means beside
+    clean-run judge bars would compare different responses.
+    """
+    rows = aggregate_rows("judge", judge, with_sd=True)
+    if human is not None:
+        rows += aggregate_rows("human", human, with_sd=False)
+    return rows
+
+
 def total_rows(consumption: dict[str, dict[str, float]]) -> list[dict]:
     """Condition means rounded to whole tokens, as the manuscript prints them."""
     return [
@@ -140,11 +153,18 @@ def main():
     parser.add_argument("--subset", default="evaluation/results/rq2_judge_subset.json")
     parser.add_argument("--responses", default="evaluation/results/rq2_responses.json")
     parser.add_argument("--human", default="evaluation/results/rq2_human_scores.csv")
+    parser.add_argument(
+        "--no-human", action="store_true",
+        help="leave human means out of rq2_aggregates.csv (and the figure)",
+    )
     parser.add_argument("--datasets", default="evaluation/datasets.json")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
 
-    for path in (args.scores, args.subset, args.responses, args.human, args.datasets):
+    needed = [args.scores, args.subset, args.responses, args.datasets]
+    if not args.no_human:
+        needed.append(args.human)
+    for path in needed:
         if not Path(path).exists():
             raise SystemExit(f"Tidak ditemukan: {path}")
     out_dir = Path(args.output_dir)
@@ -155,8 +175,10 @@ def main():
     judge = load_scores(Path(args.scores), keep)
     done = complete_tasks(judge)
     balanced = [r for r in judge if r["task_id"] in done]
-    with open(args.human) as f:
-        human = list(csv.DictReader(f))
+    human = None
+    if not args.no_human:
+        with open(args.human) as f:
+            human = list(csv.DictReader(f))
 
     responses = json.loads(Path(args.responses).read_text())
     project_paths = {
@@ -168,8 +190,7 @@ def main():
     )
 
     try:
-        aggregates = (aggregate_rows("judge", balanced, with_sd=True)
-                      + aggregate_rows("human", human, with_sd=False))
+        aggregates = figure_aggregates(balanced, human)
         per_task = per_task_rows(responses, done, hybrid)
     except ValueError as e:
         raise SystemExit(str(e))
