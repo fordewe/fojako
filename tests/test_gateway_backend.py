@@ -260,6 +260,28 @@ def test_retries_rate_limits_and_server_errors_then_succeeds(no_wait):
     assert len(t.requests) == 3
 
 
+@pytest.mark.parametrize("error", [
+    # Raised on 2026-11-11 when the connection dropped mid-response; it is an
+    # HTTPException, not an OSError, and it stopped the run instead of retrying.
+    lambda: __import__("http.client").client.IncompleteRead(b""),
+    lambda: __import__("http.client").client.RemoteDisconnected("closed"),
+    lambda: ConnectionResetError("reset"),
+    lambda: TimeoutError("timed out"),
+])
+def test_retries_a_connection_lost_mid_request(no_wait, error):
+    class Flaky(FakeTransport):
+        def __call__(self, url, headers, body, timeout):
+            if not self.requests:
+                self.requests.append(body)
+                raise error()
+            return super().__call__(url, headers, body, timeout)
+
+    t = Flaky((200, _completion()))
+    out = _backend(t).call("kimi-k3-1-pro", [{"role": "user", "content": "q"}])
+
+    assert out["attempts"] == 2
+
+
 def test_does_not_retry_a_client_error(no_wait):
     t = FakeTransport((400, '{"error": "bad reasoning_effort"}'))
 

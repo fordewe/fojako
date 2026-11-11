@@ -33,6 +33,7 @@ Self-check, before a run (prints the probe and the negative control):
 """
 
 import argparse
+import http.client
 import json
 import logging
 import os
@@ -228,7 +229,11 @@ class GatewayBackend:
             try:
                 status, text = self.transport(url, self._headers(), payload,
                                               CALL_TIMEOUT_SECONDS)
-            except (urllib.error.URLError, TimeoutError, OSError) as e:
+            # HTTPException covers IncompleteRead: on 2026-11-11 a connection
+            # dropped mid-response raised it, and the run stopped instead of
+            # retrying, because it is not an OSError.
+            except (urllib.error.URLError, http.client.HTTPException,
+                    TimeoutError, OSError) as e:
                 last_error = type(e).__name__
                 self._wait(attempt, last_error)
                 continue
