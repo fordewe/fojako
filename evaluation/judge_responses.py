@@ -13,9 +13,11 @@ The protocol is the one Section 4.5 of the paper describes:
   * The judge reports the file and declaration behind each score, so a reader
     can audit a judgement instead of trusting it.
 
-Judge and subject come from the same model family. That is a known limitation,
-and the answer to it is the human validation sample (``sample_validation.py``),
-not an argument.
+The first judge and the subject come from the same model family. That is a
+known limitation. The answer to it is the human validation sample
+(``sample_validation.py``), and a second judge from another family, run
+through ``gateway_backend.py`` (``--backend gateway``) into a scores file of
+its own. One file never mixes two judges (``check_single_judge``).
 
 Usage:
     uv run python evaluation/judge_responses.py \\
@@ -23,6 +25,12 @@ Usage:
         --datasets evaluation/datasets.json \\
         --output evaluation/results/rq2_judge_scores.csv \\
         --judge-model claude-sonnet-5
+
+    # second judge, with KENARI_API_KEY set
+    uv run python evaluation/judge_responses.py --backend gateway \\
+        --responses evaluation/results/rq2_clean_responses.json \\
+        --output evaluation/results/rq2_clean_judge2_scores.csv \\
+        --judge-model kimi-k3-1-pro --reasoning-effort high
 """
 
 import argparse
@@ -36,6 +44,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from cli_backend import FailureStreak, checked_backend  # noqa: E402
+from gateway_backend import checked_gateway_backend  # noqa: E402
 from task_runner import build_context  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -70,6 +79,36 @@ FIELDNAMES = [
     "output_tokens", "thinking_tokens", "reported_cost_usd",
     "attempts", "latency_seconds",
 ]
+
+# Recorded only for the gateway judge. The first judge's files keep FIELDNAMES,
+# so a resumed CLI run never rewrites them with new columns.
+GATEWAY_EXTRA_FIELDS = ("backend", "served_model", "reasoning_effort", "isolation")
+
+
+def fieldnames_for(backend: str) -> list[str]:
+    """Columns of a scores file written through ``backend``."""
+    if backend == "cli":
+        return FIELDNAMES
+    return FIELDNAMES + list(GATEWAY_EXTRA_FIELDS)
+
+
+def check_single_judge(path: Path, judge_model: str) -> None:
+    """Refuse to append one judge's scores to a file holding another's.
+
+    Resuming keys on (task, condition, subject model), not on the judge, so
+    nothing else would stop a second judge from landing in the first judge's
+    file, where every analysis would average the two without saying so.
+    """
+    if not path.exists():
+        return
+    with open(path) as f:
+        judges = {row.get("judge_model", "") for row in csv.DictReader(f)}
+    judges.discard("")
+    if judges and judges != {judge_model}:
+        raise ValueError(
+            f"{path} sudah berisi skor juri lain {sorted(judges)}; "
+            f"juri {judge_model} harus menulis ke berkasnya sendiri"
+        )
 
 
 def build_prompt(full_source: str, question: str, answer: str) -> str:
@@ -125,13 +164,15 @@ def parse_verdict(text: str) -> dict:
     return verdict
 
 
-def build_row(resp: dict, project: str, judge_model: str, verdict: dict, out: dict) -> dict:
+def build_row(resp: dict, project: str, judge_model: str, verdict: dict, out: dict,
+              *, extra_fields: tuple[str, ...] = ()) -> dict:
     """Assemble one CSV row, judgement and token usage together.
 
     Kept separate from the call loop so the token accounting can be tested
-    without mocking the CLI backend.
+    without mocking the CLI backend. ``extra_fields`` are copied from the
+    backend's result as they are (the gateway judge's provenance).
     """
-    return {
+    row = {
         "task_id": resp["task_id"],
         "condition": resp["condition"],
         "model": resp.get("model", ""),
@@ -152,6 +193,8 @@ def build_row(resp: dict, project: str, judge_model: str, verdict: dict, out: di
         "attempts": out.get("attempts"),
         "latency_seconds": out.get("latency_seconds"),
     }
+    row.update({k: out.get(k, "") for k in extra_fields})
+    return row
 
 
 def migrate_schema(path: Path, fieldnames: list[str]) -> None:
@@ -196,6 +239,15 @@ def main():
         default="claude-sonnet-5",
         help="Fixed for the whole run. Changing it mid-way makes scores incomparable",
     )
+    parser.add_argument(
+        "--backend", choices=("cli", "gateway"), default="cli",
+        help="cli: claude -p on the subscription (first judge); gateway: an "
+             "OpenAI-compatible gateway, key from KENARI_API_KEY (second judge)",
+    )
+    parser.add_argument(
+        "--reasoning-effort", default="high",
+        help="Gateway only. Fixed for the whole run, like the judge model",
+    )
     parser.add_argument("--limit", type=int, help="Grade at most N responses")
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -212,7 +264,13 @@ def main():
         }
 
     output_path = Path(args.output)
-    migrate_schema(output_path, FIELDNAMES)
+    fieldnames = fieldnames_for(args.backend)
+    extra_fields = () if args.backend == "cli" else GATEWAY_EXTRA_FIELDS
+    try:
+        check_single_judge(output_path, args.judge_model)
+    except ValueError as e:
+        raise SystemExit(str(e))
+    migrate_schema(output_path, fieldnames)
     scored = load_scored(output_path)
     pending = [
         r for r in responses
@@ -229,11 +287,16 @@ def main():
         return
 
     # The judge must see the module source and nothing of the operator's
-    # Claude Code setup: the first run's judge cited that setup when scoring.
-    backend = (
-        None if args.dry_run
-        else checked_backend(JUDGE_SYSTEM_PROMPT, args.judge_model)
-    )
+    # setup: the first run's judge cited that setup when scoring. Both
+    # backends pass their isolation probes before the first paid call.
+    if args.dry_run:
+        backend = None
+    elif args.backend == "cli":
+        backend = checked_backend(JUDGE_SYSTEM_PROMPT, args.judge_model)
+    else:
+        backend = checked_gateway_backend(
+            JUDGE_SYSTEM_PROMPT, args.judge_model, args.reasoning_effort
+        )
     contexts: dict[str, dict] = {}
     prompt_tokens: list[int] = []
     written = 0
@@ -272,8 +335,9 @@ def main():
             continue
 
         streak.record(ok=True)
-        row = build_row(resp, project, args.judge_model, verdict, out)
-        _append(output_path, row)
+        row = build_row(resp, project, args.judge_model, verdict, out,
+                        extra_fields=extra_fields)
+        _append(output_path, row, fieldnames)
         written += 1
 
     if args.dry_run:
@@ -288,12 +352,12 @@ def main():
     print(f"\nDinilai dan disimpan: {written} baris ke {output_path}")
 
 
-def _append(path: Path, row: dict) -> None:
+def _append(path: Path, row: dict, fieldnames: list[str] = FIELDNAMES) -> None:
     """Append one verdict. Written per row so an interrupted run keeps its work."""
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
     with open(path, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         if not exists:
             writer.writeheader()
         writer.writerow(row)

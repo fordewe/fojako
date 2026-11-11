@@ -256,3 +256,59 @@ def test_a_short_cell_is_reported_rather_than_topped_up_from_elsewhere():
     assert len(sample) == 18  # 9 cells x 2 available
     assert len(short) == 9
     assert all(have == 2 for _, have in short)
+
+
+# ── a second judge ──────────────────────────────────────────────────────────
+
+def _scores_file(path, judge_model, fieldnames):
+    import csv
+
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerow({k: "" for k in fieldnames} | {
+            "task_id": "t1", "condition": "full", "judge_model": judge_model,
+        })
+    return path
+
+
+def test_refuses_to_add_a_second_judge_to_a_scores_file(judge, tmp_path):
+    # Resuming keys on (task, condition, model), not on the judge. Pointing
+    # the second judge at the first judge's file would append its scores
+    # there, and every analysis would average two judges without saying so.
+    path = _scores_file(tmp_path / "scores.csv", "claude-sonnet-5", judge.FIELDNAMES)
+
+    with pytest.raises(ValueError, match="juri"):
+        judge.check_single_judge(path, "kimi-k3-1-pro")
+
+
+def test_resuming_with_the_same_judge_is_allowed(judge, tmp_path):
+    path = _scores_file(tmp_path / "scores.csv", "claude-sonnet-5", judge.FIELDNAMES)
+
+    judge.check_single_judge(path, "claude-sonnet-5")
+
+
+def test_a_new_scores_file_accepts_any_judge(judge, tmp_path):
+    judge.check_single_judge(tmp_path / "new.csv", "kimi-k3-1-pro")
+
+
+def test_cli_backend_keeps_the_original_columns(judge):
+    # The first judge's files must not gain columns, or migrate_schema would
+    # rewrite them on the next resumed run.
+    assert judge.fieldnames_for("cli") == judge.FIELDNAMES
+
+
+def test_gateway_rows_record_backend_served_model_effort_and_isolation(judge):
+    resp = {"task_id": "t1", "condition": "full", "model": "claude-haiku-4-5"}
+    verdict = {"accuracy": 4, "completeness": 3}
+    out = _out(backend="gateway", served_model="kimi-k3-1-pro",
+               reasoning_effort="high", isolation="direct HTTPS")
+
+    row = judge.build_row(resp, "sunflower", "kimi-k3-1-pro", verdict, out,
+                          extra_fields=judge.GATEWAY_EXTRA_FIELDS)
+
+    assert set(row) == set(judge.fieldnames_for("gateway"))
+    assert row["served_model"] == "kimi-k3-1-pro"
+    assert row["reasoning_effort"] == "high"
+    assert row["backend"] == "gateway"
+    assert row["judge_model"] == "kimi-k3-1-pro"
