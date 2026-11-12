@@ -14,10 +14,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluation"))
 
+from analyze_equivalence import PRIMARY_MARGIN, equivalence  # noqa: E402
+from analyze_rq2 import run_tests  # noqa: E402
 from export_figure_data import (  # noqa: E402
     AGGREGATE_FIELDS,
+    JUDGE_COMPARISON_FIELDS,
     aggregate_rows,
     figure_aggregates,
+    judge_comparison_rows,
     per_task_rows,
     total_rows,
     write_csv,
@@ -181,3 +185,98 @@ def test_figure_aggregates_append_human_rows_when_given():
     rows = figure_aggregates(every_cell(), human=every_cell())
 
     assert [r["rater"] for r in rows].count("human") == 18
+
+
+# ── comparison of two judges ────────────────────────────────────────────────
+
+def judged(summary_drop, hybrid_drop_every=5, per_category=15):
+    """Full scores 5; Summary loses ``summary_drop``; Hybrid loses 1 on every
+    ``hybrid_drop_every``-th task, so no comparison is all ties."""
+    rows = []
+    for category in CATEGORIES:
+        for i in range(per_category):
+            task = f"{category}_{i}"
+            hybrid = 4 if i % hybrid_drop_every == 0 else 5
+            rows += [
+                score(task, "full", category, 5, 5),
+                score(task, "summary", category, 5 - summary_drop, 5 - summary_drop),
+                score(task, "hybrid", category, hybrid, hybrid),
+            ]
+    return rows
+
+
+def test_judge_comparison_lists_ten_rows_per_judge_in_a_fixed_order():
+    rows = judge_comparison_rows({"first": judged(1), "second": judged(1)})
+
+    assert len(rows) == 20
+    first = rows[:10]
+    assert {r["judge"] for r in first} == {"first"}
+    assert [r["panel"] for r in first] == ["wilcoxon"] * 6 + ["tost"] * 4
+    assert [(r["metric"], r["comparison"]) for r in first[:6]] == [
+        ("Accuracy", "Full vs Summary"), ("Accuracy", "Full vs Hybrid"),
+        ("Accuracy", "Summary vs Hybrid"), ("Completeness", "Full vs Summary"),
+        ("Completeness", "Full vs Hybrid"), ("Completeness", "Summary vs Hybrid"),
+    ]
+    assert [(r["metric"], r["comparison"]) for r in first[6:]] == [
+        ("Accuracy", "Hybrid vs Full"), ("Completeness", "Hybrid vs Full"),
+        ("Accuracy", "Summary vs Full, navigation"),
+        ("Completeness", "Summary vs Full, navigation"),
+    ]
+
+
+def test_every_row_carries_exactly_the_declared_fields():
+    rows = judge_comparison_rows({"first": judged(1)})
+
+    assert all(set(r) == set(JUDGE_COMPARISON_FIELDS) for r in rows)
+
+
+def test_wilcoxon_rows_repeat_the_analysis_deltas_and_holm_values():
+    scores = judged(1)
+    expected = run_tests(scores)
+
+    rows = [r for r in judge_comparison_rows({"first": scores})
+            if r["panel"] == "wilcoxon"]
+
+    for row, test in zip(rows, expected):
+        assert float(row["estimate"]) == pytest.approx(test["delta"], abs=5e-4)
+        assert float(row["p_holm"]) == pytest.approx(test["p_holm"], abs=5e-5)
+        assert row["low"] == "" and row["high"] == ""
+
+
+def test_tost_rows_repeat_the_analysis_differences_and_intervals():
+    scores = judged(1)
+    expected = equivalence(scores, PRIMARY_MARGIN)
+
+    rows = [r for r in judge_comparison_rows({"first": scores})
+            if r["panel"] == "tost"]
+
+    # equivalence() lists hybrid (accuracy, completeness) then summary-navigation.
+    for row, test in zip(rows, expected):
+        assert float(row["estimate"]) == pytest.approx(test["mean_diff"], abs=5e-4)
+        assert float(row["low"]) == pytest.approx(test["ci90"][0], abs=5e-4)
+        assert float(row["high"]) == pytest.approx(test["ci90"][1], abs=5e-4)
+        assert float(row["p_holm"]) == pytest.approx(test["p_holm"], abs=5e-5)
+
+
+def test_significant_means_holm_below_alpha_for_wilcoxon_and_equivalent_for_tost():
+    # Summary a full point below Full on every task: a clear Wilcoxon result and
+    # no equivalence. Hybrid is one point below on a fifth of tasks only.
+    rows = judge_comparison_rows({"first": judged(1)})
+
+    full_vs_summary = next(r for r in rows if r["panel"] == "wilcoxon"
+                           and r["comparison"] == "Full vs Summary"
+                           and r["metric"] == "Accuracy")
+    summary_nav = next(r for r in rows if r["panel"] == "tost"
+                       and r["comparison"].startswith("Summary"))
+    hybrid = next(r for r in rows if r["panel"] == "tost"
+                  and r["comparison"] == "Hybrid vs Full")
+    assert full_vs_summary["significant"] == "yes"
+    assert summary_nav["significant"] == "no"
+    assert hybrid["significant"] == "yes"
+
+
+def test_a_judge_with_no_complete_task_raises_instead_of_writing_blanks():
+    partial = [r for r in judged(1) if r["condition"] != "hybrid"]
+
+    with pytest.raises(ValueError, match="first"):
+        judge_comparison_rows({"first": partial})

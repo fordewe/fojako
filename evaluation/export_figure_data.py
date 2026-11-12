@@ -16,6 +16,11 @@ same numbers agreed. This script derives all three from the evaluation data:
   * ``rq3_per_task.csv``: one row per task with the context each condition
     built, plus how many files Hybrid requested and how many it was sent.
 
+A fourth table, ``rq2_judge_comparison.csv``, is written only when
+``--judge2-scores`` names the second judge's scores: Cliff's delta with its
+Holm-corrected Wilcoxon p-value, and the TOST difference with its 90% interval,
+for both judges, from the same functions the analysis scripts use.
+
 Hybrid's input is rebuilt from the module files on disk, so the dataset
 checkouts named in ``datasets.json`` must be present.
 
@@ -31,6 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from analyze_equivalence import ALPHA, PRIMARY_MARGIN, equivalence  # noqa: E402
 from analyze_rq2 import (  # noqa: E402
     CATEGORIES,
     CONDITIONS,
@@ -38,6 +44,7 @@ from analyze_rq2 import (  # noqa: E402
     complete_tasks,
     load_scores,
     mean,
+    run_tests,
     stdev,
 )
 from analyze_rq3 import fill_hybrid_context_tokens, token_consumption  # noqa: E402
@@ -48,6 +55,10 @@ TOTAL_FIELDS = ["condition", "input", "output", "total"]
 PER_TASK_FIELDS = [
     "task_id", "project", "category", "full", "summary", "hybrid",
     "files_requested", "files_sent",
+]
+JUDGE_COMPARISON_FIELDS = [
+    "judge", "panel", "metric", "comparison", "estimate", "low", "high",
+    "p_holm", "significant",
 ]
 
 
@@ -139,6 +150,47 @@ def per_task_rows(
     return [rows[t] for t in sorted(rows)]
 
 
+def judge_comparison_rows(judges: dict[str, list[dict]]) -> list[dict]:
+    """Wilcoxon effect sizes and TOST intervals, for each judge in turn.
+
+    Per judge, six ``wilcoxon`` rows (estimate = Cliff's delta, Holm over the
+    six, significant = Holm p below alpha) then four ``tost`` rows (estimate =
+    mean paired difference with its 90% interval, significant = equivalent
+    within the primary margin). Both come from ``run_tests`` and
+    ``equivalence``, so the figure cannot disagree with the printed analysis.
+    A judge with no task scored under all three conditions raises: the
+    figure would draw nothing for it.
+    """
+    out = []
+    for judge, scores in judges.items():
+        done = complete_tasks(scores)
+        if not done:
+            raise ValueError(f"{judge}: no task scored under all three conditions")
+        balanced = [r for r in scores if r["task_id"] in done]
+
+        for t in run_tests(balanced):
+            p = t["p_holm"]
+            out.append({
+                "judge": judge, "panel": "wilcoxon",
+                "metric": t["dimension"].capitalize(),
+                "comparison": f"{LABEL[t['a']]} vs {LABEL[t['b']]}",
+                "estimate": f"{t['delta']:.3f}", "low": "", "high": "",
+                "p_holm": f"{p:.4f}" if p == p else "",
+                "significant": "yes" if p == p and p < ALPHA else "no",
+            })
+        for t in equivalence(balanced, PRIMARY_MARGIN):
+            where = "" if t["category"] == "all" else f", {t['category']}"
+            out.append({
+                "judge": judge, "panel": "tost",
+                "metric": t["metric"].capitalize(),
+                "comparison": f"{LABEL[t['condition']]} vs Full{where}",
+                "estimate": f"{t['mean_diff']:.3f}",
+                "low": f"{t['ci90'][0]:.3f}", "high": f"{t['ci90'][1]:.3f}",
+                "p_holm": f"{t['p_holm']:.4f}",
+                "significant": "yes" if t["equivalent"] else "no",
+            })
+    return out
+
 def write_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
     """CSV with LF line ends; the csv module defaults to CRLF."""
     with open(path, "w", newline="") as f:
@@ -157,11 +209,17 @@ def main():
         "--no-human", action="store_true",
         help="leave human means out of rq2_aggregates.csv (and the figure)",
     )
+    parser.add_argument(
+        "--judge2-scores", default=None,
+        help="second judge's scores; also writes rq2_judge_comparison.csv",
+    )
     parser.add_argument("--datasets", default="evaluation/datasets.json")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
 
     needed = [args.scores, args.subset, args.responses, args.datasets]
+    if args.judge2_scores:
+        needed.append(args.judge2_scores)
     if not args.no_human:
         needed.append(args.human)
     for path in needed:
@@ -195,10 +253,21 @@ def main():
     except ValueError as e:
         raise SystemExit(str(e))
     totals = total_rows(token_consumption(responses, done, hybrid))
+    comparison = None
+    if args.judge2_scores:
+        second = load_scores(Path(args.judge2_scores), keep)
+        try:
+            comparison = judge_comparison_rows({"first": judge, "second": second})
+        except ValueError as e:
+            raise SystemExit(str(e))
 
     write_csv(out_dir / "rq2_aggregates.csv", AGGREGATE_FIELDS, aggregates)
     write_csv(out_dir / "rq3_token_totals.csv", TOTAL_FIELDS, totals)
     write_csv(out_dir / "rq3_per_task.csv", PER_TASK_FIELDS, per_task)
+    if comparison is not None:
+        write_csv(out_dir / "rq2_judge_comparison.csv", JUDGE_COMPARISON_FIELDS,
+                  comparison)
+        print(f"{len(comparison)} baris perbandingan juri -> rq2_judge_comparison.csv")
     print(
         f"{len(done)} tugas lengkap; {len(aggregates)} sel RQ2, "
         f"{len(per_task)} baris per tugas -> {out_dir}"
