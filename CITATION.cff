@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this software or its evaluation data, please cite it as below."
+title: "kotlin-mcp: Structural Code Summaries for LLM Context, with Evaluation Data"
+type: software
+authors:
+  - given-names: Muchamad
+    family-names: Mafmudin
+    orcid: "https://orcid.org/0009-0002-7133-860X"
+repository-code: "https://github.com/fordewe/fojako"
+license: MIT
+abstract: >-
+  kotlin-mcp is an MCP server that parses Kotlin and Java with tree-sitter and
+  reduces each file to its declarations: package and imports, type
+  declarations, method signatures with annotations and visibility, and
+  properties. It discards method bodies, comments, formatting, and generated
+  sources. The repository also holds the tasks, model responses, judge and
+  human scores, and analysis scripts behind the paper "Structural Code
+  Summarization as a Context Strategy for LLM-Assisted Development: A
+  Task-Based Evaluation under a Token Budget". The code is under the MIT
+  License; the evaluation data is under ODC-By 1.0 (see LICENSE-DATA).
+keywords:
+  - Android
+  - Kotlin
+  - code summarization
+  - LLM
+  - token optimization
+  - tree-sitter
+  - MCP
+  - LLM-as-a-judge
